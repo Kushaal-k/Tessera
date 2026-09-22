@@ -11,3 +11,6 @@ export type { PeerState, AwarenessChangeCallback } from "./awareness.js";
 
 export { TesseraSocketProvider } from "./provider.js";
 export type { TesseraProviderOptions } from "./provider.js";
+
+export { Workspace, createWorkspace, WORKSPACE_KEYS } from "./workspace.js";
+

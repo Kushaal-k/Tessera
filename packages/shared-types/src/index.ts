@@ -122,3 +122,72 @@ export interface SandboxConfig {
   readonly cpuQuota: number;
   readonly networkDisabled: boolean;
 }
+
+/**
+ * Metadata associated with a project workspace.
+ */
+export interface WorkspaceMetadata {
+  /** Unique workspace identifier. */
+  readonly id: string;
+  /** Human-readable workspace name. */
+  readonly name: string;
+  /** Optional workspace description. */
+  readonly description?: string;
+  /** ISO-8601 creation timestamp. */
+  readonly createdAt: string;
+  /** ISO-8601 last update timestamp. */
+  readonly updatedAt: string;
+}
+
+/**
+ * Represents a file stored within a workspace.
+ */
+export interface WorkspaceFile {
+  /** Unique file identifier. */
+  readonly id: string;
+  /** Name of the file with extension (e.g. "index.ts"). */
+  readonly name: string;
+  /** Parent folder ID, or null if located in the workspace root. */
+  readonly parentId: string | null;
+  /** Language runtime or syntax mode if known. */
+  readonly language?: SupportedLanguage | string;
+  /** Approximate byte size of the file. */
+  readonly size?: number;
+  /** ISO-8601 creation timestamp. */
+  readonly createdAt: string;
+  /** ISO-8601 last update timestamp. */
+  readonly updatedAt: string;
+}
+
+/**
+ * Represents a folder stored within a workspace.
+ */
+export interface WorkspaceFolder {
+  /** Unique folder identifier. */
+  readonly id: string;
+  /** Directory name (e.g. "src"). */
+  readonly name: string;
+  /** Parent folder ID, or null if located in the workspace root. */
+  readonly parentId: string | null;
+  /** ISO-8601 creation timestamp. */
+  readonly createdAt: string;
+  /** ISO-8601 last update timestamp. */
+  readonly updatedAt: string;
+}
+
+/**
+ * Options used to initialize a new Workspace instance.
+ */
+export interface CreateWorkspaceOptions {
+  /** Unique workspace identifier. */
+  readonly id: string;
+  /** Human-readable workspace name. */
+  readonly name: string;
+  /** Optional workspace description. */
+  readonly description?: string;
+  /** ISO-8601 creation timestamp. If omitted, current time is used. */
+  readonly createdAt?: string;
+  /** ISO-8601 update timestamp. If omitted, current time is used. */
+  readonly updatedAt?: string;
+}
+
