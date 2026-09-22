@@ -1,4 +1,5 @@
 from mcp.server.fastmcp import FastMCP
+
 from .config import settings
 from .db import get_collection
 from .embeddings import EmbeddingService

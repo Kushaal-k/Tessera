@@ -1,5 +1,5 @@
-from time import perf_counter
 import logging
+from time import perf_counter
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 from pymongo import ASCENDING

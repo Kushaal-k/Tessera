@@ -52,4 +52,3 @@ class EmbeddingService:
         model = _load_model(self.model_name)
         vector = await loop.run_in_executor(None, model.encode, text)
         return vector.tolist()
-

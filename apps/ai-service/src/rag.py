@@ -1,7 +1,8 @@
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
-from .db import get_collection
+
 from .config import settings
+from .db import get_collection
 
 router = APIRouter(prefix="/rag", tags=["RAG"])
 
