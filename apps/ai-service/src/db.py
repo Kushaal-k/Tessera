@@ -70,7 +70,7 @@ async def check_connection() -> dict[str, object]:
     start = perf_counter()
     try:
         await _client.admin.command("ping")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         status["error"] = str(exc)
         return status
 
