@@ -1,7 +1,7 @@
-from pymongo import uri_parser
-from pymongo.errors import InvalidURI
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
+from pymongo import uri_parser
+from pymongo.errors import InvalidURI
 
 _VALID_URI_SCHEMES = ("mongodb://", "mongodb+srv://")
 

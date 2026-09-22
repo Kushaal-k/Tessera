@@ -9,8 +9,8 @@ from fastapi.responses import JSONResponse
 
 from .config import settings
 from .db import check_connection, close_db, connect_db, ensure_collection_indexes
-from .rag import router as rag_router
 from .mcp_server import mcp
+from .rag import router as rag_router
 
 logger = logging.getLogger("tessera.ai.timing")
 
