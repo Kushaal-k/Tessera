@@ -331,6 +331,205 @@ describe("Workspace Model", () => {
     });
   });
 
+  describe("Folder Management (Issue #514)", () => {
+    it("creates a folder at workspace root with default parentId null", () => {
+      const workspace = createWorkspace({ id: "ws-folder-root", name: "Root WS" });
+
+      const result = workspace.createFolder("src");
+
+      expect(result.success).toBe(true);
+      expect(result.folder).toBeDefined();
+      expect(result.folder?.name).toBe("src");
+      expect(result.folder?.parentId).toBeNull();
+      expect(result.folder?.id).toBeDefined();
+      expect(result.folder?.createdAt).toBeDefined();
+      expect(result.folder?.updatedAt).toBeDefined();
+
+      expect(workspace.hasFolder(result.folder!.id)).toBe(true);
+      expect(workspace.getFolder(result.folder!.id)?.name).toBe("src");
+    });
+
+    it("rejects empty folder names", () => {
+      const workspace = createWorkspace({ id: "ws-empty-folder", name: "Empty Folder WS" });
+
+      const result = workspace.createFolder("   ");
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Folder name cannot be empty");
+      expect(workspace.getFolders()).toHaveLength(0);
+    });
+
+    it("creates nested folders and computes paths", () => {
+      const workspace = createWorkspace({ id: "ws-nested", name: "Nested WS" });
+
+      const root = workspace.createFolder("src").folder!;
+      const nested = workspace.createFolder("components", { parentId: root.id }).folder!;
+      const deep = workspace.createFolder("ui", { parentId: nested.id }).folder!;
+
+      expect(nested.parentId).toBe(root.id);
+      expect(deep.parentId).toBe(nested.id);
+
+      expect(workspace.getFolderPath(root.id)).toBe("/src");
+      expect(workspace.getFolderPath(nested.id)).toBe("/src/components");
+      expect(workspace.getFolderPath(deep.id)).toBe("/src/components/ui");
+
+      const rootChildren = workspace.getSubfolders(root.id);
+      expect(rootChildren).toHaveLength(1);
+      expect(rootChildren[0]!.id).toBe(nested.id);
+    });
+
+    it("rejects creating a folder under a non-existent parent folder", () => {
+      const workspace = createWorkspace({ id: "ws-invalid-parent", name: "Invalid Parent WS" });
+
+      const result = workspace.createFolder("orphan", { parentId: "non-existent-id" });
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Parent folder does not exist");
+      expect(workspace.getFolders()).toHaveLength(0);
+    });
+
+    it("prevents duplicate folder names within the same parent folder", () => {
+      const workspace = createWorkspace({ id: "ws-dup-folders", name: "Dup Folder WS" });
+
+      const first = workspace.createFolder("docs");
+      expect(first.success).toBe(true);
+
+      const duplicate = workspace.createFolder("docs");
+      expect(duplicate.success).toBe(false);
+      expect(duplicate.error).toBe("Duplicate folder in parent directory");
+      expect(workspace.getFolders()).toHaveLength(1);
+    });
+
+    it("allows same folder name in different parent folders", () => {
+      const workspace = createWorkspace({ id: "ws-diff-parent", name: "Diff Parent WS" });
+
+      const src = workspace.createFolder("src").folder!;
+      const tests = workspace.createFolder("tests").folder!;
+
+      const srcUtils = workspace.createFolder("utils", { parentId: src.id });
+      const testUtils = workspace.createFolder("utils", { parentId: tests.id });
+
+      expect(srcUtils.success).toBe(true);
+      expect(testUtils.success).toBe(true);
+      expect(workspace.getFolderPath(srcUtils.folder!.id)).toBe("/src/utils");
+      expect(workspace.getFolderPath(testUtils.folder!.id)).toBe("/tests/utils");
+    });
+
+    it("deletes a folder recursively, cascading to nested subfolders and contained files", () => {
+      const workspace = createWorkspace({ id: "ws-cascade", name: "Cascade WS" });
+
+      const src = workspace.createFolder("src").folder!;
+      const components = workspace.createFolder("components", { parentId: src.id }).folder!;
+      const fileInSubfolder = workspace.createFile("Button.tsx", {
+        parentId: components.id,
+        initialContent: "export const Button = () => null;",
+      }).file!;
+      const fileInRoot = workspace.createFile("index.ts", {
+        parentId: src.id,
+        initialContent: "export * from './components';",
+      }).file!;
+
+      expect(workspace.hasFolder(src.id)).toBe(true);
+      expect(workspace.hasFolder(components.id)).toBe(true);
+      expect(workspace.hasFile(fileInSubfolder.id)).toBe(true);
+      expect(workspace.hasFile(fileInRoot.id)).toBe(true);
+
+      const deleted = workspace.deleteFolder(src.id);
+      expect(deleted).toBe(true);
+
+      expect(workspace.hasFolder(src.id)).toBe(false);
+      expect(workspace.hasFolder(components.id)).toBe(false);
+      expect(workspace.hasFile(fileInSubfolder.id)).toBe(false);
+      expect(workspace.hasFile(fileInRoot.id)).toBe(false);
+      expect(workspace.getFileText(fileInSubfolder.id).toString()).toBe("");
+      expect(workspace.getFileText(fileInRoot.id).toString()).toBe("");
+      expect(workspace.deleteFolder(src.id)).toBe(false);
+    });
+
+    it("renames a folder and validates naming constraints", () => {
+      const workspace = createWorkspace({ id: "ws-rename-folder", name: "Rename Folder WS" });
+
+      const folder = workspace.createFolder("old-name").folder!;
+      workspace.createFolder("existing");
+
+      const emptyRename = workspace.renameFolder(folder.id, "   ");
+      expect(emptyRename.success).toBe(false);
+      expect(emptyRename.error).toBe("Folder name cannot be empty");
+
+      const dupRename = workspace.renameFolder(folder.id, "existing");
+      expect(dupRename.success).toBe(false);
+      expect(dupRename.error).toBe("Duplicate folder in parent directory");
+
+      const sameNameRename = workspace.renameFolder(folder.id, "old-name");
+      expect(sameNameRename.success).toBe(true);
+
+      const validRename = workspace.renameFolder(folder.id, "new-name");
+      expect(validRename.success).toBe(true);
+      expect(validRename.folder?.name).toBe("new-name");
+      expect(workspace.getFolder(folder.id)?.name).toBe("new-name");
+    });
+
+    it("moves a folder to another parent folder", () => {
+      const workspace = createWorkspace({ id: "ws-move-folder", name: "Move Folder WS" });
+
+      const folderA = workspace.createFolder("folderA").folder!;
+      const folderB = workspace.createFolder("folderB").folder!;
+
+      const moveResult = workspace.moveFolder(folderB.id, folderA.id);
+      expect(moveResult.success).toBe(true);
+      expect(moveResult.folder?.parentId).toBe(folderA.id);
+      expect(workspace.getFolderPath(folderB.id)).toBe("/folderA/folderB");
+    });
+
+    it("prevents moving a folder into itself", () => {
+      const workspace = createWorkspace({ id: "ws-move-self", name: "Move Self WS" });
+
+      const folder = workspace.createFolder("self").folder!;
+      const result = workspace.moveFolder(folder.id, folder.id);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Cannot move folder into itself");
+    });
+
+    it("prevents moving a folder into its own descendant (cycle prevention)", () => {
+      const workspace = createWorkspace({ id: "ws-cycle", name: "Cycle WS" });
+
+      const a = workspace.createFolder("a").folder!;
+      const b = workspace.createFolder("b", { parentId: a.id }).folder!;
+      const c = workspace.createFolder("c", { parentId: b.id }).folder!;
+
+      const cycleResult = workspace.moveFolder(a.id, c.id);
+      expect(cycleResult.success).toBe(false);
+      expect(cycleResult.error).toBe("Cannot move folder into its own descendant");
+
+      expect(workspace.getFolder(a.id)?.parentId).toBeNull();
+      expect(workspace.getFolder(b.id)?.parentId).toBe(a.id);
+      expect(workspace.getFolder(c.id)?.parentId).toBe(b.id);
+    });
+
+    it("prevents moving a folder to a non-existent parent folder", () => {
+      const workspace = createWorkspace({ id: "ws-move-nonexistent", name: "Move Nonexistent WS" });
+
+      const folder = workspace.createFolder("source").folder!;
+      const result = workspace.moveFolder(folder.id, "missing-folder-id");
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Target folder does not exist");
+    });
+
+    it("prevents destination name collisions when moving folders", () => {
+      const workspace = createWorkspace({ id: "ws-move-collision", name: "Move Collision WS" });
+
+      const target = workspace.createFolder("target").folder!;
+      workspace.createFolder("shared", { parentId: target.id });
+
+      const source = workspace.createFolder("shared").folder!;
+      const result = workspace.moveFolder(source.id, target.id);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("already exists in target folder");
+    });
+  });
+
+
   describe("Independence from Transport and UI (CRDT Synchronization)", () => {
     it("synchronizes state and file content between workspace instances via CRDT updates", () => {
       const workspaceA = createWorkspace({

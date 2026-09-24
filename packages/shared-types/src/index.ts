@@ -203,4 +203,12 @@ export interface FileOperationResult {
   readonly error?: string;
 }
 
+export interface CreateFolderOptions {
+  readonly parentId?: string | null;
+}
 
+export interface FolderOperationResult {
+  readonly success: boolean;
+  readonly folder?: WorkspaceFolder;
+  readonly error?: string;
+}

@@ -6,6 +6,8 @@ import type {
   CreateWorkspaceOptions,
   CreateFileOptions,
   FileOperationResult,
+  CreateFolderOptions,
+  FolderOperationResult,
 } from "@tessera/shared-types";
 
 export const WORKSPACE_KEYS = {
@@ -122,6 +124,10 @@ export class Workspace {
     }
 
     const parentId = options.parentId ?? null;
+    if (parentId !== null && !this.hasFolder(parentId)) {
+      return { success: false, error: "Parent folder does not exist" };
+    }
+
     for (const file of this.getFiles()) {
       if (file.name === trimmedName && file.parentId === parentId) {
         return { success: false, error: "Duplicate file in folder" };
@@ -322,12 +328,209 @@ export class Workspace {
     return this._folders.has(id);
   }
 
+  public createFolder(
+    name: string,
+    options: CreateFolderOptions = {},
+  ): FolderOperationResult {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      return { success: false, error: "Folder name cannot be empty" };
+    }
+
+    const parentId = options.parentId ?? null;
+    if (parentId !== null && !this.hasFolder(parentId)) {
+      return { success: false, error: "Parent folder does not exist" };
+    }
+
+    for (const folder of this.getFolders()) {
+      if (folder.parentId === parentId && folder.name === trimmedName) {
+        return { success: false, error: "Duplicate folder in parent directory" };
+      }
+    }
+
+    const folderId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const folder: WorkspaceFolder = {
+      id: folderId,
+      name: trimmedName,
+      parentId,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.doc.transact(() => {
+      this._folders.set(folderId, folder);
+    });
+
+    return { success: true, folder };
+  }
+
   public deleteFolder(id: string): boolean {
     if (!this._folders.has(id)) {
       return false;
     }
-    this._folders.delete(id);
+
+    const descendantIds = new Set<string>();
+    const queue = [id];
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      descendantIds.add(currentId);
+      for (const folder of this.getFolders()) {
+        if (folder.parentId === currentId && !descendantIds.has(folder.id)) {
+          queue.push(folder.id);
+        }
+      }
+    }
+
+    this.doc.transact(() => {
+      for (const file of this.getFiles()) {
+        if (file.parentId && descendantIds.has(file.parentId)) {
+          this._files.delete(file.id);
+          const ytext = this.getFileText(file.id);
+          if (ytext.length > 0) {
+            ytext.delete(0, ytext.length);
+          }
+        }
+      }
+
+      for (const folderId of descendantIds) {
+        this._folders.delete(folderId);
+      }
+    });
+
     return true;
+  }
+
+  public renameFolder(id: string, newName: string): FolderOperationResult {
+    const folder = this.getFolder(id);
+    if (!folder) {
+      return { success: false, error: "Folder not found" };
+    }
+
+    const trimmedName = newName.trim();
+    if (!trimmedName) {
+      return { success: false, error: "Folder name cannot be empty" };
+    }
+
+    if (folder.name === trimmedName) {
+      return { success: true, folder };
+    }
+
+    for (const f of this.getFolders()) {
+      if (f.id !== id && f.parentId === folder.parentId && f.name === trimmedName) {
+        return { success: false, error: "Duplicate folder in parent directory" };
+      }
+    }
+
+    const now = new Date().toISOString();
+    const updatedFolder: WorkspaceFolder = {
+      ...folder,
+      name: trimmedName,
+      updatedAt: now,
+    };
+
+    this.doc.transact(() => {
+      this._folders.set(id, updatedFolder);
+    });
+
+    return { success: true, folder: updatedFolder };
+  }
+
+  public moveFolder(
+    id: string,
+    targetParentId: string | null,
+  ): FolderOperationResult {
+    const folder = this.getFolder(id);
+    if (!folder) {
+      return { success: false, error: "Folder not found" };
+    }
+
+    if (folder.parentId === targetParentId) {
+      return { success: true, folder };
+    }
+
+    if (targetParentId !== null) {
+      if (targetParentId === id) {
+        return { success: false, error: "Cannot move folder into itself" };
+      }
+
+      if (!this.hasFolder(targetParentId)) {
+        return { success: false, error: "Target folder does not exist" };
+      }
+
+      if (this.isDescendant(targetParentId, id)) {
+        return {
+          success: false,
+          error: "Cannot move folder into its own descendant",
+        };
+      }
+    }
+
+    for (const f of this.getFolders()) {
+      if (f.id !== id && f.parentId === targetParentId && f.name === folder.name) {
+        return {
+          success: false,
+          error: "A folder with the same name already exists in target folder",
+        };
+      }
+    }
+
+    const now = new Date().toISOString();
+    const updatedFolder: WorkspaceFolder = {
+      ...folder,
+      parentId: targetParentId,
+      updatedAt: now,
+    };
+
+    this.doc.transact(() => {
+      this._folders.set(id, updatedFolder);
+    });
+
+    return { success: true, folder: updatedFolder };
+  }
+
+  public getFolderPath(id: string): string | undefined {
+    const folder = this.getFolder(id);
+    if (!folder) {
+      return undefined;
+    }
+
+    const segments: string[] = [];
+    let current: WorkspaceFolder | undefined = folder;
+    const visited = new Set<string>();
+
+    while (current) {
+      if (visited.has(current.id)) {
+        break;
+      }
+      visited.add(current.id);
+      segments.unshift(current.name);
+      current = current.parentId ? this.getFolder(current.parentId) : undefined;
+    }
+
+    return "/" + segments.join("/");
+  }
+
+  public getSubfolders(parentId: string | null = null): WorkspaceFolder[] {
+    return this.getFolders().filter((folder) => folder.parentId === parentId);
+  }
+
+  public isDescendant(folderId: string, potentialAncestorId: string): boolean {
+    let current = this.getFolder(folderId);
+    const visited = new Set<string>();
+
+    while (current && current.parentId !== null) {
+      if (visited.has(current.id)) {
+        break;
+      }
+      visited.add(current.id);
+      if (current.parentId === potentialAncestorId) {
+        return true;
+      }
+      current = this.getFolder(current.parentId);
+    }
+
+    return false;
   }
 
   public getFolders(): WorkspaceFolder[] {
