@@ -15,6 +15,7 @@
     "build": "tsc --project tsconfig.build.json",
     "dev": "tsc --project tsconfig.build.json --watch",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests src/",
     "clean": "rm -rf dist",
     "lint": "echo 'lint not configured yet'"
   },

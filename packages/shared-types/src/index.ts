@@ -191,3 +191,16 @@ export interface CreateWorkspaceOptions {
   readonly updatedAt?: string;
 }
 
+export interface CreateFileOptions {
+  readonly parentId?: string | null;
+  readonly language?: SupportedLanguage | string;
+  readonly initialContent?: string;
+}
+
+export interface FileOperationResult {
+  readonly success: boolean;
+  readonly file?: WorkspaceFile;
+  readonly error?: string;
+}
+
+

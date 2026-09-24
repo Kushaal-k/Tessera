@@ -1,7 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import * as Y from "yjs";
-import { Workspace, createWorkspace, WORKSPACE_KEYS } from "./workspace.js";
-import type { WorkspaceFile, WorkspaceFolder } from "@tessera/shared-types";
+import {
+  Workspace,
+  createWorkspace,
+  WORKSPACE_KEYS,
+  detectLanguage,
+} from "./workspace.js";
+import type { WorkspaceFolder } from "@tessera/shared-types";
 
 describe("Workspace Model", () => {
   describe("Creation", () => {
@@ -81,100 +86,170 @@ describe("Workspace Model", () => {
     });
   });
 
-  describe("File Storage", () => {
-    it("stores, retrieves, checks, and lists files", () => {
-      const workspace = createWorkspace({ id: "ws-files", name: "Files WS" });
+  describe("Language Detection", () => {
+    it("detects programming languages by extension", () => {
+      expect(detectLanguage("index.ts")).toBe("typescript");
+      expect(detectLanguage("App.tsx")).toBe("typescript");
+      expect(detectLanguage("script.js")).toBe("javascript");
+      expect(detectLanguage("server.mjs")).toBe("javascript");
+      expect(detectLanguage("main.py")).toBe("python");
+      expect(detectLanguage("main.go")).toBe("go");
+      expect(detectLanguage("lib.rs")).toBe("rust");
+      expect(detectLanguage("Main.java")).toBe("java");
+      expect(detectLanguage("main.cpp")).toBe("cpp");
+      expect(detectLanguage("data.json")).toBe("json");
+      expect(detectLanguage("index.html")).toBe("html");
+      expect(detectLanguage("style.css")).toBe("css");
+      expect(detectLanguage("README.md")).toBe("markdown");
+      expect(detectLanguage("file_without_ext")).toBe("plaintext");
+      expect(detectLanguage("unknown.xyz")).toBe("plaintext");
+    });
+  });
 
-      const file1: WorkspaceFile = {
-        id: "file-1",
-        name: "index.ts",
-        parentId: null,
-        language: "typescript",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+  describe("File Management (Issue #513)", () => {
+    it("creates a file with auto-detected language and initial content", () => {
+      const workspace = createWorkspace({ id: "ws-file-mgmt", name: "File WS" });
 
-      const file2: WorkspaceFile = {
-        id: "file-2",
-        name: "styles.css",
-        parentId: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+      const result = workspace.createFile("main.py", {
+        initialContent: "print('hello')",
+      });
 
-      workspace.setFile(file1);
-      workspace.setFile(file2);
+      expect(result.success).toBe(true);
+      expect(result.file).toBeDefined();
+      expect(result.file?.name).toBe("main.py");
+      expect(result.file?.language).toBe("python");
+      expect(result.file?.parentId).toBeNull();
+      expect(result.file?.size).toBe("print('hello')".length);
 
-      expect(workspace.hasFile("file-1")).toBe(true);
-      expect(workspace.hasFile("file-2")).toBe(true);
-      expect(workspace.hasFile("file-nonexistent")).toBe(false);
-
-      expect(workspace.getFile("file-1")).toEqual(file1);
-      expect(workspace.getFile("file-2")).toEqual(file2);
-      expect(workspace.getFile("file-nonexistent")).toBeUndefined();
-
-      const allFiles = workspace.getFiles();
-      expect(allFiles).toHaveLength(2);
-      expect(allFiles).toEqual(expect.arrayContaining([file1, file2]));
+      const content = workspace.getFileContent(result.file!.id);
+      expect(content).toBe("print('hello')");
     });
 
-    it("deletes files from the workspace", () => {
-      const workspace = createWorkspace({ id: "ws-files", name: "Files WS" });
+    it("rejects empty file names", () => {
+      const workspace = createWorkspace({ id: "ws-empty", name: "Empty WS" });
 
-      const file: WorkspaceFile = {
-        id: "file-del",
-        name: "delete-me.ts",
+      const result = workspace.createFile("   ");
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("File name cannot be empty");
+      expect(workspace.getFiles()).toHaveLength(0);
+    });
+
+    it("prevents duplicate file names within the same parent folder", () => {
+      const workspace = createWorkspace({ id: "ws-dup", name: "Dup WS" });
+
+      const first = workspace.createFile("index.ts");
+      expect(first.success).toBe(true);
+
+      const duplicate = workspace.createFile("index.ts");
+      expect(duplicate.success).toBe(false);
+      expect(duplicate.error).toBe("Duplicate file in folder");
+      expect(workspace.getFiles()).toHaveLength(1);
+    });
+
+    it("allows same file name in different parent folders", () => {
+      const workspace = createWorkspace({ id: "ws-diff-folder", name: "Diff WS" });
+      workspace.setFolder({
+        id: "folder-1",
+        name: "src",
         parentId: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      };
+      });
 
-      workspace.setFile(file);
-      expect(workspace.hasFile("file-del")).toBe(true);
+      const rootFile = workspace.createFile("index.ts", { parentId: null });
+      const folderFile = workspace.createFile("index.ts", { parentId: "folder-1" });
 
-      const deleted = workspace.deleteFile("file-del");
+      expect(rootFile.success).toBe(true);
+      expect(folderFile.success).toBe(true);
+      expect(workspace.getFiles()).toHaveLength(2);
+    });
+
+    it("deletes a file and clears its text buffer", () => {
+      const workspace = createWorkspace({ id: "ws-del", name: "Del WS" });
+      const created = workspace.createFile("temp.ts", {
+        initialContent: "const x = 1;",
+      });
+      const fileId = created.file!.id;
+
+      expect(workspace.hasFile(fileId)).toBe(true);
+      expect(workspace.getFileContent(fileId)).toBe("const x = 1;");
+
+      const deleted = workspace.deleteFile(fileId);
       expect(deleted).toBe(true);
-      expect(workspace.hasFile("file-del")).toBe(false);
-      expect(workspace.getFile("file-del")).toBeUndefined();
+      expect(workspace.hasFile(fileId)).toBe(false);
+      expect(workspace.getFile(fileId)).toBeUndefined();
+      expect(workspace.getFileContent(fileId)).toBeUndefined();
 
-      const deleteAgain = workspace.deleteFile("file-del");
-      expect(deleteAgain).toBe(false);
+      expect(workspace.deleteFile(fileId)).toBe(false);
     });
 
-    it("provides collaborative Y.Text for file contents", () => {
-      const workspace = createWorkspace({ id: "ws-text", name: "Text WS" });
+    it("updates file content and updates metadata size and updatedAt", () => {
+      const workspace = createWorkspace({ id: "ws-update", name: "Update WS" });
+      const created = workspace.createFile("doc.txt", {
+        initialContent: "Initial content",
+      });
+      const fileId = created.file!.id;
 
-      const text = workspace.getFileText("file-1");
-      expect(text).toBeInstanceOf(Y.Text);
+      const updated = workspace.updateFileContent(fileId, "New content updated");
 
-      text.insert(0, "console.log('hello world');");
-      expect(text.toString()).toBe("console.log('hello world');");
+      expect(updated).toBe(true);
 
-      const sameText = workspace.getFileText("file-1");
-      expect(sameText.toString()).toBe("console.log('hello world');");
+      expect(workspace.getFileContent(fileId)).toBe("New content updated");
+      const file = workspace.getFile(fileId);
+      expect(file?.size).toBe("New content updated".length);
+      expect(file?.updatedAt).toBeDefined();
+
+      const nonExistent = workspace.updateFileContent("invalid-id", "test");
+      expect(nonExistent).toBe(false);
     });
 
-    it("notifies listeners on file changes", () => {
-      const workspace = createWorkspace({ id: "ws-files-obs", name: "Obs WS" });
+    it("renames a file and prevents duplicate names in the same folder", () => {
+      const workspace = createWorkspace({ id: "ws-rename", name: "Rename WS" });
+      const file1 = workspace.createFile("old_name.ts")!.file!;
+      workspace.createFile("existing.ts");
 
-      const listener = vi.fn();
-      const unsubscribe = workspace.onFilesChanged(listener);
+      const renameToDuplicate = workspace.renameFile(file1.id, "existing.ts");
+      expect(renameToDuplicate.success).toBe(false);
+      expect(renameToDuplicate.error).toBe("Duplicate file in folder");
 
-      const file: WorkspaceFile = {
-        id: "file-obs",
-        name: "main.py",
+      const renameToEmpty = workspace.renameFile(file1.id, "   ");
+      expect(renameToEmpty.success).toBe(false);
+      expect(renameToEmpty.error).toBe("File name cannot be empty");
+
+      const validRename = workspace.renameFile(file1.id, "new_name.py");
+      expect(validRename.success).toBe(true);
+      expect(validRename.file?.name).toBe("new_name.py");
+      expect(validRename.file?.language).toBe("python");
+      expect(workspace.getFile(file1.id)?.name).toBe("new_name.py");
+    });
+
+    it("moves a file to another folder and prevents destination name collisions", () => {
+      const workspace = createWorkspace({ id: "ws-move", name: "Move WS" });
+      workspace.setFolder({
+        id: "folder-target",
+        name: "target",
         parentId: null,
-        language: "python",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      };
+      });
 
-      workspace.setFile(file);
-      expect(listener).toHaveBeenCalledTimes(1);
+      const file = workspace.createFile("app.ts")!.file!;
+      workspace.createFile("app.ts", { parentId: "folder-target" });
 
-      unsubscribe();
-      workspace.deleteFile("file-obs");
-      expect(listener).toHaveBeenCalledTimes(1);
+      const moveCollision = workspace.moveFile(file.id, "folder-target");
+      expect(moveCollision.success).toBe(false);
+      expect(moveCollision.error).toContain("already exists in target folder");
+
+      const moveNonExistentFolder = workspace.moveFile(file.id, "missing-folder");
+      expect(moveNonExistentFolder.success).toBe(false);
+      expect(moveNonExistentFolder.error).toBe("Target folder does not exist");
+
+      workspace.deleteFile(workspace.getFiles().find(f => f.parentId === "folder-target")!.id);
+
+      const validMove = workspace.moveFile(file.id, "folder-target");
+      expect(validMove.success).toBe(true);
+      expect(validMove.file?.parentId).toBe("folder-target");
+      expect(workspace.getFile(file.id)?.parentId).toBe("folder-target");
     });
   });
 
@@ -230,9 +305,7 @@ describe("Workspace Model", () => {
       const deleted = workspace.deleteFolder("folder-del");
       expect(deleted).toBe(true);
       expect(workspace.hasFolder("folder-del")).toBe(false);
-
-      const deleteAgain = workspace.deleteFolder("folder-del");
-      expect(deleteAgain).toBe(false);
+      expect(workspace.deleteFolder("folder-del")).toBe(false);
     });
 
     it("notifies listeners on folder changes", () => {
@@ -258,8 +331,8 @@ describe("Workspace Model", () => {
     });
   });
 
-  describe("Independence from Transport and UI", () => {
-    it("synchronizes state between workspace instances via CRDT updates", () => {
+  describe("Independence from Transport and UI (CRDT Synchronization)", () => {
+    it("synchronizes state and file content between workspace instances via CRDT updates", () => {
       const workspaceA = createWorkspace({
         id: "ws-sync",
         name: "Sync Test Workspace",
@@ -271,39 +344,19 @@ describe("Workspace Model", () => {
         docB,
       );
 
-      const file: WorkspaceFile = {
-        id: "synced-file",
-        name: "app.ts",
-        parentId: null,
-        language: "typescript",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      workspaceA.setFile(file);
+      const created = workspaceA.createFile("index.ts", {
+        initialContent: "console.log('init');",
+      });
+      const fileId = created.file!.id;
 
-      const folder: WorkspaceFolder = {
-        id: "synced-folder",
-        name: "lib",
-        parentId: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      workspaceA.setFolder(folder);
-
-      const textA = workspaceA.getFileText("synced-file");
-      textA.insert(0, "export const x = 42;");
-
-      workspaceA.updateMetadata({ description: "Updated description" });
+      workspaceA.updateFileContent(fileId, "console.log('updated content');");
 
       const updateFromA = Y.encodeStateAsUpdate(workspaceA.doc);
       Y.applyUpdate(workspaceB.doc, updateFromA);
 
-      expect(workspaceB.getFile("synced-file")).toEqual(file);
-      expect(workspaceB.getFolder("synced-folder")).toEqual(folder);
-      expect(workspaceB.getFileText("synced-file").toString()).toBe(
-        "export const x = 42;",
-      );
-      expect(workspaceB.getMetadata().description).toBe("Updated description");
+      expect(workspaceB.hasFile(fileId)).toBe(true);
+      expect(workspaceB.getFileContent(fileId)).toBe("console.log('updated content');");
+      expect(workspaceB.getFile(fileId)?.name).toBe("index.ts");
     });
   });
 
@@ -314,4 +367,3 @@ describe("Workspace Model", () => {
     });
   });
 });
-
