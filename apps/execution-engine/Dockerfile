@@ -1,5 +1,4 @@
-# apps/execution-engine/Dockerfile
-FROM node:20-bookworm-slim
+FROM node:26-bookworm-slim
 
 # Avoid tzdata interactive prompt during apt install
 ENV DEBIAN_FRONTEND=noninteractive
