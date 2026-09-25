@@ -133,7 +133,6 @@ async function ensureImageExists(image: string): Promise<void> {
  * Parses and formats raw g++ compiler error logs into clean, boxed visual frames.
  */
 export function formatCppCompilerErrors(rawLogs: string): string {
-  // Clean Docker stream multiplexing headers (starts with stream type 1 or 2, followed by 3 null bytes and 4 length bytes)
   const cleanedLogs = rawLogs.replace(/[\u0000-\u0002]\u0000\u0000\u0000[\s\S]{4}/g, "");
 
   const lines = cleanedLogs.split("\n");
@@ -143,7 +142,7 @@ export function formatCppCompilerErrors(rawLogs: string): string {
   const closeBlock = () => {
     if (isBlockOpen) {
       result.push("└" + "─".repeat(78));
-      result.push(""); // spacing line
+      result.push("");
       isBlockOpen = false;
     }
   };
@@ -153,8 +152,6 @@ export function formatCppCompilerErrors(rawLogs: string): string {
     if (line === undefined) continue;
 
     const trimmedLine = line.trim();
-
-    // Match compiler error/warning header e.g. /tmp/main.cpp:5:5: error: 'cout' is not a member of 'std'
     const errorRegex = /^\/tmp\/main\.cpp:(\d+):(\d+):\s*(error|warning|note):\s*(.*)$/i;
     const errorMatch = line.match(errorRegex);
 
@@ -183,7 +180,6 @@ export function formatCppCompilerErrors(rawLogs: string): string {
       continue;
     }
 
-    // Match compiler context line e.g. /tmp/main.cpp: In function 'int main()':
     const contextRegex = /^\/tmp\/main\.cpp:\s*In\s+function\s+['"](.*)['"]\s*:/i;
     const contextMatch = line.match(contextRegex);
     if (contextMatch) {
@@ -217,7 +213,6 @@ export function formatCppCompilerErrors(rawLogs: string): string {
 
   closeBlock();
 
-  // Trim trailing empty lines
   while (result.length > 0 && result[result.length - 1] === "") {
     result.pop();
   }
@@ -280,7 +275,7 @@ export async function executeInSandbox(
       try {
         await container.stop({ t: 1 });
       } catch {
-        // already stopped
+        // Container already terminated
       }
       return {
         taskId: task.id,

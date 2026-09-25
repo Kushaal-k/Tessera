@@ -21,12 +21,8 @@ describe("demuxDockerStream", () => {
   it("strips the 8-byte header that the old raw read leaked into the output", () => {
     const framed = frame(STREAM_STDOUT, "Hello World\n");
 
-    // Reproduction of the bug: reading the multiplexed buffer straight as UTF-8
-    // (the previous behavior) leaks the binary header, so it is NOT clean output.
     expect(framed.toString("utf-8")).not.toBe("Hello World\n");
     expect(framed.toString("utf-8").charCodeAt(0)).toBe(STREAM_STDOUT);
-
-    // The fix: clean stdout with no leading control bytes.
     expect(demuxDockerStream(framed)).toEqual({ stdout: "Hello World\n", stderr: "" });
   });
 
