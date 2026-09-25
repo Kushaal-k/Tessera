@@ -92,14 +92,7 @@ export class TesseraSocketProvider {
     }
   };
 
-  // FIX: Wrapped Y.applyUpdate in ydoc.transact() with `this` as origin.
-  // Without transact(), y-monaco's `beforeAllTransactions` hook does not fire
-  // in time to snapshot the local cursor via _savedSelections, so the
-  // selection restore after the edit is a no-op → cursor jumps to 0.
-  // Wrapping in transact() guarantees the sequence:
-  //   1. beforeAllTransactions fires → cursor saved
-  //   2. applyUpdate runs → text changed
-  //   3. _ytextObserver fires → cursor restored
+  // Apply updates inside doc.transact with provider origin so y-monaco preserves cursor selections.
   private readonly handleSyncStep2 = (data: Uint8Array): void => {
     try {
       this.ydoc.transact(() => {
@@ -111,9 +104,6 @@ export class TesseraSocketProvider {
     }
   };
 
-  // FIX: Same transact() wrap for every live keystroke update from a
-  // remote peer. This is the hot path — fires on every character typed
-  // by any other collaborator.
   private readonly handleSyncUpdate = (data: Uint8Array): void => {
     try {
       this.ydoc.transact(() => {
@@ -128,7 +118,6 @@ export class TesseraSocketProvider {
     update: Uint8Array,
     origin: unknown,
   ): void => {
-    // Skip updates that originated from this provider to avoid echo
     if (origin === this) return;
     this.socket.emit("sync-update", update);
   };
@@ -142,30 +131,31 @@ export class TesseraSocketProvider {
     updated: number[];
     removed: number[];
   }): void => {
-  [...added, ...updated, ...removed].forEach((clientId) => {
-    this.pendingAwarenessClients.add(clientId);
-  });
+    [...added, ...updated, ...removed].forEach((clientId) => {
+      this.pendingAwarenessClients.add(clientId);
+    });
 
-  if (this.awarenessThrottleTimer) {
-    return;
-  }
-
-  this.awarenessThrottleTimer = setTimeout(() => {
-    const changedClients = [...this.pendingAwarenessClients];
-
-    if (changedClients.length > 0) {
-      const encoded = encodeAwarenessUpdate(
-        this.awareness,
-        changedClients,
-      );
-
-      this.socket.emit("awareness-update", encoded);
+    if (this.awarenessThrottleTimer) {
+      return;
     }
 
-    this.pendingAwarenessClients.clear();
-    this.awarenessThrottleTimer = null;
-  }, TesseraSocketProvider.AWARENESS_THROTTLE_MS);
-};
+    this.awarenessThrottleTimer = setTimeout(() => {
+      const changedClients = [...this.pendingAwarenessClients];
+
+      if (changedClients.length > 0) {
+        const encoded = encodeAwarenessUpdate(
+          this.awareness,
+          changedClients,
+        );
+
+        this.socket.emit("awareness-update", encoded);
+      }
+
+      this.pendingAwarenessClients.clear();
+      this.awarenessThrottleTimer = null;
+    }, TesseraSocketProvider.AWARENESS_THROTTLE_MS);
+  };
+
   private readonly handleAwarenessRemoteUpdate = (data: Uint8Array): void => {
     try {
       applyAwarenessUpdate(this.awareness, new Uint8Array(data), this);
