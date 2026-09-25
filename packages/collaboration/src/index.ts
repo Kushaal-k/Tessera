@@ -17,5 +17,6 @@ export {
   createWorkspace,
   WORKSPACE_KEYS,
   detectLanguage,
+  buildWorkspaceTree,
 } from "./workspace.js";
 

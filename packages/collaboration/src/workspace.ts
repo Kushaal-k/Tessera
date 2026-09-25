@@ -8,6 +8,9 @@ import type {
   FileOperationResult,
   CreateFolderOptions,
   FolderOperationResult,
+  WorkspaceNode,
+  WorkspaceFileNode,
+  WorkspaceFolderNode,
 } from "@tessera/shared-types";
 
 export const WORKSPACE_KEYS = {
@@ -552,6 +555,51 @@ export class Workspace {
   public destroy(): void {
     this.doc.destroy();
   }
+
+  public buildWorkspaceTree(rootParentId: string | null = null): WorkspaceNode[] {
+    const basePath = rootParentId ? (this.getFolderPath(rootParentId) ?? "") : "";
+    return buildWorkspaceTree(this.getFiles(), this.getFolders(), rootParentId, basePath);
+  }
+}
+
+export function buildWorkspaceTree(
+  files: readonly WorkspaceFile[],
+  folders: readonly WorkspaceFolder[],
+  rootParentId: string | null = null,
+  basePath: string = "",
+): WorkspaceNode[] {
+  const buildSubtree = (
+    parentId: string | null,
+    parentPath: string,
+  ): WorkspaceNode[] => {
+    const childFolders = folders
+      .filter((f) => f.parentId === parentId)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const childFiles = files
+      .filter((f) => f.parentId === parentId)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const folderNodes: WorkspaceFolderNode[] = childFolders.map((folder) => {
+      const folderPath = `${parentPath}/${folder.name}`;
+      return {
+        ...folder,
+        type: "folder",
+        path: folderPath,
+        children: buildSubtree(folder.id, folderPath),
+      };
+    });
+
+    const fileNodes: WorkspaceFileNode[] = childFiles.map((file) => ({
+      ...file,
+      type: "file",
+      path: `${parentPath}/${file.name}`,
+    }));
+
+    return [...folderNodes, ...fileNodes];
+  };
+
+  return buildSubtree(rootParentId, basePath);
 }
 
 export function createWorkspace(

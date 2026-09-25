@@ -136,3 +136,16 @@ export interface FolderOperationResult {
   readonly folder?: WorkspaceFolder;
   readonly error?: string;
 }
+
+export interface WorkspaceFileNode extends WorkspaceFile {
+  readonly type: "file";
+  readonly path: string;
+}
+
+export interface WorkspaceFolderNode extends WorkspaceFolder {
+  readonly type: "folder";
+  readonly path: string;
+  readonly children: readonly WorkspaceNode[];
+}
+
+export type WorkspaceNode = WorkspaceFileNode | WorkspaceFolderNode;
