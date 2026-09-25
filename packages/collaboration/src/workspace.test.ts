@@ -5,8 +5,13 @@ import {
   createWorkspace,
   WORKSPACE_KEYS,
   detectLanguage,
+  buildWorkspaceTree,
 } from "./workspace.js";
-import type { WorkspaceFolder } from "@tessera/shared-types";
+import type {
+  WorkspaceFolder,
+  WorkspaceFolderNode,
+  WorkspaceFileNode,
+} from "@tessera/shared-types";
 
 describe("Workspace Model", () => {
   describe("Creation", () => {
@@ -106,7 +111,7 @@ describe("Workspace Model", () => {
     });
   });
 
-  describe("File Management (Issue #513)", () => {
+  describe("File Management", () => {
     it("creates a file with auto-detected language and initial content", () => {
       const workspace = createWorkspace({ id: "ws-file-mgmt", name: "File WS" });
 
@@ -331,7 +336,7 @@ describe("Workspace Model", () => {
     });
   });
 
-  describe("Folder Management (Issue #514)", () => {
+  describe("Folder Management", () => {
     it("creates a folder at workspace root with default parentId null", () => {
       const workspace = createWorkspace({ id: "ws-folder-root", name: "Root WS" });
 
@@ -526,6 +531,153 @@ describe("Workspace Model", () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("already exists in target folder");
+    });
+  });
+
+  describe("Workspace Tree", () => {
+    it("generates a hierarchical tree with root files and folders", () => {
+      const workspace = createWorkspace({ id: "ws-tree-root", name: "Tree Root WS" });
+
+      const folder = workspace.createFolder("docs").folder!;
+      const file = workspace.createFile("README.md").file!;
+
+      const tree = workspace.buildWorkspaceTree();
+
+      expect(tree).toHaveLength(2);
+      expect(tree[0]).toMatchObject({
+        id: folder.id,
+        name: "docs",
+        type: "folder",
+        path: "/docs",
+        children: [],
+      });
+      expect(tree[1]).toMatchObject({
+        id: file.id,
+        name: "README.md",
+        type: "file",
+        path: "/README.md",
+      });
+    });
+
+    it("supports multi-level nested folders and places child files under parent folders", () => {
+      const workspace = createWorkspace({ id: "ws-tree-nested", name: "Tree Nested WS" });
+
+      const src = workspace.createFolder("src").folder!;
+      const components = workspace.createFolder("components", { parentId: src.id }).folder!;
+      const button = workspace.createFile("Button.tsx", { parentId: components.id }).file!;
+      const index = workspace.createFile("index.ts", { parentId: src.id }).file!;
+      const rootFile = workspace.createFile("package.json").file!;
+
+      const tree = workspace.buildWorkspaceTree();
+
+      expect(tree).toHaveLength(2);
+
+      const srcNode = tree[0] as WorkspaceFolderNode;
+      expect(srcNode.name).toBe("src");
+      expect(srcNode.type).toBe("folder");
+      expect(srcNode.path).toBe("/src");
+      expect(srcNode.children).toHaveLength(2);
+
+      const componentsNode = srcNode.children[0] as WorkspaceFolderNode;
+      expect(componentsNode.name).toBe("components");
+      expect(componentsNode.type).toBe("folder");
+      expect(componentsNode.path).toBe("/src/components");
+      expect(componentsNode.children).toHaveLength(1);
+
+      const buttonNode = componentsNode.children[0] as WorkspaceFileNode;
+      expect(buttonNode.name).toBe("Button.tsx");
+      expect(buttonNode.type).toBe("file");
+      expect(buttonNode.path).toBe("/src/components/Button.tsx");
+      expect(buttonNode.id).toBe(button.id);
+
+      const indexNode = srcNode.children[1] as WorkspaceFileNode;
+      expect(indexNode.name).toBe("index.ts");
+      expect(indexNode.type).toBe("file");
+      expect(indexNode.path).toBe("/src/index.ts");
+      expect(indexNode.id).toBe(index.id);
+
+      const rootFileNode = tree[1] as WorkspaceFileNode;
+      expect(rootFileNode.name).toBe("package.json");
+      expect(rootFileNode.type).toBe("file");
+      expect(rootFileNode.path).toBe("/package.json");
+      expect(rootFileNode.id).toBe(rootFile.id);
+    });
+
+    it("handles empty folders by preserving an empty children array", () => {
+      const workspace = createWorkspace({ id: "ws-tree-empty", name: "Tree Empty WS" });
+
+      const emptyFolder = workspace.createFolder("empty").folder!;
+      const tree = workspace.buildWorkspaceTree();
+
+      expect(tree).toHaveLength(1);
+      const node = tree[0] as WorkspaceFolderNode;
+      expect(node.id).toBe(emptyFolder.id);
+      expect(node.type).toBe("folder");
+      expect(node.children).toEqual([]);
+    });
+
+    it("maintains deterministic ordering with folders first and alphabetical sorting", () => {
+      const workspace = createWorkspace({ id: "ws-tree-order", name: "Tree Order WS" });
+
+      workspace.createFile("zebra.ts");
+      workspace.createFolder("zoo");
+      workspace.createFile("apple.ts");
+      const alpha = workspace.createFolder("alpha").folder!;
+
+      workspace.createFile("beta.ts", { parentId: alpha.id });
+      workspace.createFolder("sub-folder", { parentId: alpha.id });
+      workspace.createFile("alpha.ts", { parentId: alpha.id });
+
+      const tree = workspace.buildWorkspaceTree();
+
+      expect(tree.map((node) => ({ name: node.name, type: node.type }))).toEqual([
+        { name: "alpha", type: "folder" },
+        { name: "zoo", type: "folder" },
+        { name: "apple.ts", type: "file" },
+        { name: "zebra.ts", type: "file" },
+      ]);
+
+      const alphaNode = tree[0] as WorkspaceFolderNode;
+      expect(alphaNode.children.map((child) => ({ name: child.name, type: child.type }))).toEqual([
+        { name: "sub-folder", type: "folder" },
+        { name: "alpha.ts", type: "file" },
+        { name: "beta.ts", type: "file" },
+      ]);
+    });
+
+    it("derives a scoped subtree when rootParentId is provided", () => {
+      const workspace = createWorkspace({ id: "ws-tree-subtree", name: "Tree Subtree WS" });
+
+      const rootFolder = workspace.createFolder("src").folder!;
+      workspace.createFolder("utils", { parentId: rootFolder.id });
+      workspace.createFile("index.ts", { parentId: rootFolder.id });
+      workspace.createFile("root.ts");
+
+      const subtree = workspace.buildWorkspaceTree(rootFolder.id);
+
+      expect(subtree).toHaveLength(2);
+      expect(subtree[0]).toMatchObject({
+        name: "utils",
+        type: "folder",
+        path: "/src/utils",
+      });
+      expect(subtree[1]).toMatchObject({
+        name: "index.ts",
+        type: "file",
+        path: "/src/index.ts",
+      });
+    });
+
+    it("supports building a tree using the standalone buildWorkspaceTree utility", () => {
+      const workspace = createWorkspace({ id: "ws-tree-util", name: "Tree Utility WS" });
+
+      workspace.createFolder("src");
+      workspace.createFile("index.ts");
+
+      const memberTree = workspace.buildWorkspaceTree();
+      const standaloneTree = buildWorkspaceTree(workspace.getFiles(), workspace.getFolders());
+
+      expect(standaloneTree).toEqual(memberTree);
     });
   });
 
