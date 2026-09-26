@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { SidePanel } from "@tessera/ui-components";
 import { CollaborativeEditor } from "./components/CollaborativeEditor.js";
 import {
@@ -10,6 +10,10 @@ import { setLocalParticipant } from "@tessera/collaboration";
 import type { SyncConnectionConfig, SupportedLanguage, ExecutionResult } from "@tessera/shared-types";
 import { useDebouncedValue } from "./hooks/useDebouncedValue.js";
 import { downloadTextFile } from "./utils/downloadUtils.js";
+import { FileTree } from "./components/FileTree.js";
+import { useWorkspace } from "./hooks/useWorkspace.js";
+import type { WorkspaceFileNode } from "@tessera/shared-types";
+import { FilePlus, FolderPlus } from "lucide-react";
 
 const SYNC_SERVER_URL = "http://localhost:4000";
 const DEFAULT_ROOM = "default-room";
@@ -33,6 +37,11 @@ export function App() {
   const [output, setOutput] = useState<ExecutionResult | null>(null);
   const [showMinimap, setShowMinimap] = useState(true);
   const [fontSize, setFontSize] = useState(14);
+  const [activeFileId, setActiveFileId] = useState<string | null>(null);
+  const [creatingItem, setCreatingItem] = useState<{
+    type: "file" | "folder";
+    parentId: string | null;
+  } | null>(null);
 
   const config = useMemo<SyncConnectionConfig>(
     () => ({
@@ -43,7 +52,13 @@ export function App() {
     [participant],
   );
 
-  const { ytext, awareness, connected, socket } = useCollaboration(config);
+  const { ydoc, ytext, awareness, connected, socket } = useCollaboration(config);
+  const { workspace, tree, files } = useWorkspace(ydoc);
+
+  const activeYText = useMemo(() => {
+    if (!workspace || !activeFileId) return ytext;
+    return workspace.getFileText(activeFileId);
+  }, [workspace, activeFileId, ytext]);
 
   // Sync displayName into the shared awareness state whenever it changes.
   // TesseraSocketProvider is already subscribed to awareness "update" events,
@@ -84,21 +99,63 @@ export function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [socket, ytext, isRunning, connected]);
+  }, [socket, activeYText, isRunning, connected, language]);
+
+  useEffect(() => {
+    if(files.length > 0 && (!activeFileId || !files.some((f) => f.id === activeFileId))) {
+      const firstFile = files[0];
+      if (firstFile) {
+        setActiveFileId(firstFile.id);
+      }
+    }
+  }, [files, activeFileId]);
+
+  const handleSelectFile = useCallback((file: WorkspaceFileNode) => {
+    setActiveFileId(file.id);
+
+    if (file.language) {
+      setLanguage(file.language as SupportedLanguage);
+    }
+  }, []);
+
+  const handleConfirmCreate = useCallback(
+    (name: string, type: "file" | "folder", parentId: string | null) => {
+      if (!workspace) return;
+      if (type === "file") {
+        const res = workspace.createFile(name, { parentId });
+        if (res.success && res.file) {
+          setActiveFileId(res.file.id);
+          if (res.file.language) {
+            setLanguage(res.file.language as SupportedLanguage);
+          }
+        }
+      } else {
+        workspace.createFolder(name, { parentId });
+      }
+      setCreatingItem(null);
+    },
+    [workspace],
+  );
+
+  const handleCancelCreate = useCallback(() => {
+    setCreatingItem(null);
+  }, []);
 
   const handleRunCode = () => {
-    if (!socket || !ytext || isRunning) return;
+    if (!socket || !activeYText || isRunning) return;
     setIsRunning(true);
     setOutput(null);
     socket.emit("execute-code", {
-      code: ytext.toString(),
+      code: activeYText.toString(),
       language,
     });
   };
 
   const handleDownload = () => {
-    if (!ytext) return;
-    downloadTextFile(ytext.toString(), FILE_NAMES[language]);
+    if (!activeYText) return;
+    const activeFile = files.find((f) => f.id === activeFileId);
+    const fileName = activeFile?.name || FILE_NAMES[language];
+    downloadTextFile(activeYText.toString(), fileName);
   };
   return (
     <div className="flex h-screen flex-col bg-[var(--color-bg)]">
@@ -190,15 +247,40 @@ export function App() {
         {/* Sidebar */}
         <aside className="w-56 shrink-0 border-r border-[var(--color-border)] bg-[var(--color-surface)] p-3 flex flex-col gap-4">
           {/* Explorer section */}
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Explorer
-            </p>
-            <div className="mt-3 space-y-1">
-              <div className="rounded px-2 py-1 text-sm font-medium text-tessera-400 bg-tessera-500/10 border border-tessera-500/20">
-                📄 {FILE_NAMES[language]}
+          <div className="flex flex-col min-h-0">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                Explorer
+              </span>
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  title="New File"
+                  aria-label="New File"
+                  onClick={() => setCreatingItem({ type: "file", parentId: null })}
+                  className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors focus:outline-none focus:ring-1 focus:ring-tessera-500/50"
+                >
+                  <FilePlus className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  title="New Folder"
+                  aria-label="New Folder"
+                  onClick={() => setCreatingItem({ type: "folder", parentId: null })}
+                  className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors focus:outline-none focus:ring-1 focus:ring-tessera-500/50"
+                >
+                  <FolderPlus className="h-3.5 w-3.5" />
+                </button>
               </div>
             </div>
+            <FileTree
+              tree={tree}
+              activeFileId={activeFileId}
+              onSelectFile={handleSelectFile}
+              creatingItem={creatingItem}
+              onConfirmCreate={handleConfirmCreate}
+              onCancelCreate={handleCancelCreate}
+            />
           </div>
 
           {/* Display name section */}
@@ -278,9 +360,10 @@ export function App() {
 
         {/* Editor */}
         <main className="flex-1 overflow-hidden">
-          {ytext && awareness ? (
+          {activeYText && awareness ? (
             <CollaborativeEditor
-              ytext={ytext}
+              key={activeFileId ?? "default"}
+              ytext={activeYText}
               awareness={awareness}
               language={language}
               showMinimap={showMinimap}
