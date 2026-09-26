@@ -13,17 +13,18 @@
     "lint": "echo 'lint not configured yet'"
   },
   "dependencies": {
-    "@tessera/shared-types": "*",
-    "@tessera/collaboration": "*",
-    "@tessera/ui-components": "*",
     "@monaco-editor/react": "^4.7.0",
+    "@tessera/collaboration": "*",
+    "@tessera/shared-types": "*",
+    "@tessera/ui-components": "*",
+    "lucide-react": "^1.48.0",
     "monaco-editor": "^0.55.1",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "socket.io-client": "^4.8.3",
-    "yjs": "^13.6.31",
     "y-monaco": "^0.1.6",
-    "y-protocols": "^1.0.7"
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.31"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.0",
