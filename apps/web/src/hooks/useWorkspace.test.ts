@@ -169,4 +169,28 @@ describe("Workspace Tree & Hook State Synchronization", () => {
     const duplicateFolderRename = ws.renameFolder(folder1.folder!.id, "docs");
     expect(duplicateFolderRename.success).toBe(false);
   });
+
+  it("deletes single files and recursively deletes folders with all nested descendants", () => {
+    const ydoc = new Y.Doc();
+    const ws = createWorkspace({ id: "ws-1", name: "Test WS" }, ydoc);
+
+    const rootFile = ws.createFile("root.ts");
+    const parentFolder = ws.createFolder("src");
+    const subFolder = ws.createFolder("components", { parentId: parentFolder.folder!.id });
+    const nestedFile = ws.createFile("Button.tsx", { parentId: subFolder.folder!.id });
+
+    expect(ws.getFiles().length).toBe(2);
+    expect(ws.getFolders().length).toBe(2);
+
+    // Deleting single file removes it
+    const deletedFileRes = ws.deleteFile(rootFile.file!.id);
+    expect(deletedFileRes).toBe(true);
+    expect(ws.getFiles().some((f) => f.id === rootFile.file!.id)).toBe(false);
+
+    // Deleting parent folder cascades to subfolder and nested files
+    const deletedFolderRes = ws.deleteFolder(parentFolder.folder!.id);
+    expect(deletedFolderRes).toBe(true);
+    expect(ws.getFolders().length).toBe(0);
+    expect(ws.getFiles().some((f) => f.id === nestedFile.file!.id)).toBe(false);
+  });
 });
