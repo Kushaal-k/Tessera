@@ -29,6 +29,7 @@ export interface FileTreeProps {
   readonly onConfirmCreate?: (name: string, type: "file" | "folder", parentId: string | null) => void;
   readonly onCancelCreate?: () => void;
   readonly onDeleteItem?: (id: string, type: "file" | "folder") => void;
+  readonly onRenameItem?: (id: string, newName: string, type: "file" | "folder") => void;
 }
 
 function InlineCreationInput({
@@ -145,6 +146,7 @@ export function FileTree({
   onConfirmCreate,
   onCancelCreate,
   onDeleteItem,
+  onRenameItem,
 }: FileTreeProps) {
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => {
     const ids = new Set<string>();
@@ -160,6 +162,8 @@ export function FileTree({
     collectFolderIds(tree);
     return ids;
   });
+
+  const [renamingId, setRenamingId] = useState<string | null>(null);
 
   // Auto-expand folder if a file/folder is being created inside it
   useEffect(() => {
@@ -189,13 +193,18 @@ export function FileTree({
     folderId: string,
     isExpanded: boolean,
   ) => {
-    e.preventDefault();
     if (e.key === "ArrowRight" && !isExpanded) {
+      e.preventDefault();
       toggleFolder(folderId);
     } else if (e.key === "ArrowLeft" && isExpanded) {
+      e.preventDefault();
       toggleFolder(folderId);
     } else if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
       toggleFolder(folderId);
+    } else if (e.key === "F2") {
+      e.preventDefault();
+      setRenamingId(folderId);
     }
   };
 
@@ -206,7 +215,18 @@ export function FileTree({
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       onSelectFile?.(file);
+    } else if (e.key === "F2") {
+      e.preventDefault();
+      setRenamingId(file.id);
     }
+  };
+
+  const handleDoubleClick = (
+    e: React.MouseEvent,
+    id: string
+  ) => {
+    e.stopPropagation();
+    setRenamingId(id);
   };
 
   const renderNode = (node: WorkspaceNode, depth: number) => {
@@ -221,6 +241,7 @@ export function FileTree({
               type="button"
               onClick={() => toggleFolder(node.id)}
               onKeyDown={(e) => handleFolderKeyDown(e, node.id, isExpanded)}
+              onDoubleClick={(e) => handleDoubleClick(e, node.id)}
               style={{ paddingLeft: `${depth * 14 + 4}px` }}
               className="flex flex-1 items-center gap-2 py-0.5 text-xs font-mono font-medium text-slate-300 hover:text-white outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-tessera-500/50"
             >
@@ -234,7 +255,37 @@ export function FileTree({
               ) : (
                 <Folder className="h-3.5 w-3.5 shrink-0 text-slate-400" />
               )}
-              <span className="truncate">{node.name}</span>
+              {renamingId === node.id ? (
+                <input
+                  type="text"
+                  defaultValue={node.name}
+                  autoFocus
+                  onClick={(e) => e.stopPropagation()}
+                  onBlur={(e) => {
+                    const val = e.target.value.trim();
+                    if (val && val !== node.name) {
+                      onRenameItem?.(node.id, val, "folder");
+                    }
+                    setRenamingId(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const val = e.currentTarget.value.trim();
+                      if (val && val !== node.name) {
+                        onRenameItem?.(node.id, val, "folder");
+                      }
+                      setRenamingId(null);
+                    } else if (e.key === "Escape") {
+                      e.preventDefault();
+                      setRenamingId(null);
+                    }
+                  }}
+                  className="w-full bg-slate-900 border border-tessera-500 rounded px-1.5 py-0.5 text-xs text-white font-mono outline-none shadow-inner"
+                />
+              ) : (
+                <span className="truncate">{node.name}</span>
+              )}
             </button>
 
             <div className="opacity-0 group-hover/row:opacity-100 flex items-center gap-0.5 transition-opacity">
@@ -321,11 +372,49 @@ export function FileTree({
             type="button"
             onClick={() => onSelectFile?.(node)}
             onKeyDown={(e) => handleFileKeyDown(e, node)}
+            onDoubleClick={(e) => handleDoubleClick(e, node.id)}
             style={{ paddingLeft: `${depth * 14 + (depth > 0 ? 14 : 4)}px` }}
             className="flex flex-1 items-center gap-2 py-0.5 text-xs font-mono font-medium outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-tessera-500/50 truncate"
           >
             <FileCode className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-            <span className="truncate">{node.name}</span>
+            {renamingId === node.id ? (
+              <input
+                type="text"
+                defaultValue={node.name}
+                autoFocus
+                ref={(el) => {
+                  if (el) {
+                    const dotIndex = node.name.lastIndexOf(".");
+                    const end = dotIndex > 0 ? dotIndex : node.name.length;
+                    el.setSelectionRange(0, end);
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onBlur={(e) => {
+                  const val = e.target.value.trim();
+                  if (val && val !== node.name) {
+                    onRenameItem?.(node.id, val, "file");
+                  }
+                  setRenamingId(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const val = e.currentTarget.value.trim();
+                    if (val && val !== node.name) {
+                      onRenameItem?.(node.id, val, "file");
+                    }
+                    setRenamingId(null);
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    setRenamingId(null);
+                  }
+                }}
+                className="w-full bg-slate-900 border border-tessera-500 rounded px-1.5 py-0.5 text-xs text-white font-mono outline-none shadow-inner"
+              />
+            ) : (
+              <span className="truncate">{node.name}</span>
+            )}
           </button>
 
           <div className="opacity-0 group-hover/row:opacity-100 flex items-center gap-0.5 transition-opacity">
