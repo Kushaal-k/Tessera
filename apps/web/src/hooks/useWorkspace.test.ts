@@ -138,4 +138,35 @@ describe("Workspace Tree & Hook State Synchronization", () => {
     const nestedFile = ws.createFile("main.ts", { parentId: folder1.folder!.id });
     expect(nestedFile.success).toBe(true);
   });
+
+  it("renames files and folders, updating language on extension change and preventing duplicate names", () => {
+    const ydoc = new Y.Doc();
+    const ws = createWorkspace({ id: "ws-1", name: "Test WS" }, ydoc);
+
+    const file1 = ws.createFile("app.ts");
+    ws.createFile("index.py");
+    const folder1 = ws.createFolder("src");
+    ws.createFolder("docs");
+
+    expect(file1.file?.language).toBe("typescript");
+
+    // Renaming file extension updates language
+    const renamedFile = ws.renameFile(file1.file!.id, "app.rs");
+    expect(renamedFile.success).toBe(true);
+    expect(renamedFile.file?.name).toBe("app.rs");
+    expect(renamedFile.file?.language).toBe("rust");
+
+    // Sibling duplicate file rename fails
+    const duplicateRename = ws.renameFile(file1.file!.id, "index.py");
+    expect(duplicateRename.success).toBe(false);
+
+    // Folder rename works
+    const renamedFolder = ws.renameFolder(folder1.folder!.id, "source");
+    expect(renamedFolder.success).toBe(true);
+    expect(renamedFolder.folder?.name).toBe("source");
+
+    // Sibling duplicate folder rename fails
+    const duplicateFolderRename = ws.renameFolder(folder1.folder!.id, "docs");
+    expect(duplicateFolderRename.success).toBe(false);
+  });
 });

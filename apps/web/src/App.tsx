@@ -157,6 +157,18 @@ export function App() {
     [workspace, activeFileId, files],
   );
 
+  const handleRenameItem = useCallback(
+    (id: string, newName: string, type: "file" | "folder") => {
+      if (!workspace) return;
+      if (type === "file") {
+        workspace.renameFile(id, newName);
+      } else {
+        workspace.renameFolder(id, newName);
+      }
+    },
+    [workspace],
+  );
+
   const handleRunCode = () => {
     if (!socket || !activeYText || isRunning) return;
     setIsRunning(true);
@@ -298,6 +310,7 @@ export function App() {
               onConfirmCreate={handleConfirmCreate}
               onCancelCreate={handleCancelCreate}
               onDeleteItem={handleDeleteItem}
+              onRenameItem={handleRenameItem}
             />
           </div>
 
