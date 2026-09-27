@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { SidePanel } from "@tessera/ui-components";
+import { SidePanel, ConfirmModal } from "@tessera/ui-components";
 import { CollaborativeEditor } from "./components/CollaborativeEditor.js";
 import {
   useCollaboration,
@@ -43,6 +43,12 @@ export function App() {
   const [fontSize, setFontSize] = useState(14);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [creatingItem, setCreatingItem] = useState<CreatingItemState | null>(null);
+  const [confirmDeleteState, setConfirmDeleteState] = useState<{
+    id: string;
+    name: string;
+    fileCount: number;
+    subFolderCount: number;
+  } | null>(null);
 
   const config = useMemo<SyncConnectionConfig>(
     () => ({
@@ -54,7 +60,7 @@ export function App() {
   );
 
   const { ydoc, ytext, awareness, connected, socket } = useCollaboration(config);
-  const { workspace, tree, files } = useWorkspace(ydoc);
+  const { workspace, tree, files, folders } = useWorkspace(ydoc);
 
   const activeYText = useMemo(() => {
     if (!workspace || !activeFileId) {
@@ -138,6 +144,40 @@ export function App() {
     [workspace],
   );
 
+  const performFolderDeletion = useCallback(
+    (folderId: string) => {
+      if (!workspace) {
+        return;
+      }
+
+      const descendantFolderIds = new Set<string>();
+      const queue = [folderId];
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        descendantFolderIds.add(current);
+        for (const folder of folders) {
+          if (folder.parentId === current && !descendantFolderIds.has(folder.id)) {
+            queue.push(folder.id);
+          }
+        }
+      }
+
+      const deletedFileIds = new Set(
+        files
+          .filter((f) => f.parentId && descendantFolderIds.has(f.parentId))
+          .map((f) => f.id),
+      );
+
+      workspace.deleteFolder(folderId);
+
+      if (activeFileId && deletedFileIds.has(activeFileId)) {
+        const remaining = files.filter((f) => !deletedFileIds.has(f.id));
+        setActiveFileId(remaining[0]?.id ?? null);
+      }
+    },
+    [workspace, folders, files, activeFileId],
+  );
+
   const handleDeleteItem = useCallback(
     (id: string, type: "file" | "folder") => {
       if (!workspace) {
@@ -150,10 +190,42 @@ export function App() {
           setActiveFileId(remaining[0]?.id ?? null);
         }
       } else {
-        workspace.deleteFolder(id);
+        const folder = workspace.getFolder(id);
+        if (!folder) {
+          return;
+        }
+
+        const descendantFolderIds = new Set<string>();
+        const queue = [id];
+        while (queue.length > 0) {
+          const current = queue.shift()!;
+          descendantFolderIds.add(current);
+          for (const f of folders) {
+            if (f.parentId === current && !descendantFolderIds.has(f.id)) {
+              queue.push(f.id);
+            }
+          }
+        }
+
+        const descendantFiles = files.filter(
+          (f) => f.parentId && descendantFolderIds.has(f.parentId),
+        );
+        const subFolderCount = descendantFolderIds.size - 1;
+        const fileCount = descendantFiles.length;
+
+        if (fileCount > 0 || subFolderCount > 0) {
+          setConfirmDeleteState({
+            id,
+            name: folder.name,
+            fileCount,
+            subFolderCount,
+          });
+        } else {
+          performFolderDeletion(id);
+        }
       }
     },
-    [workspace, activeFileId, files],
+    [workspace, activeFileId, files, folders, performFolderDeletion],
   );
 
   const handleRenameItem = useCallback(
@@ -446,6 +518,31 @@ export function App() {
           Ready for editor context.
         </div>
       </SidePanel>
+
+      <ConfirmModal
+        open={Boolean(confirmDeleteState)}
+        title={`Delete '${confirmDeleteState?.name}'?`}
+        description={
+          confirmDeleteState
+            ? `This folder contains ${confirmDeleteState.fileCount} file${confirmDeleteState.fileCount === 1 ? "" : "s"}${
+                confirmDeleteState.subFolderCount > 0
+                  ? ` and ${confirmDeleteState.subFolderCount} subfolder${confirmDeleteState.subFolderCount === 1 ? "" : "s"}`
+                  : ""
+              }. Are you sure you want to delete it and all of its contents?`
+            : undefined
+        }
+        confirmLabel="Delete Folder"
+        cancelLabel="Cancel"
+        onConfirm={() => {
+          if (confirmDeleteState) {
+            performFolderDeletion(confirmDeleteState.id);
+            setConfirmDeleteState(null);
+          }
+        }}
+        onCancel={() => {
+          setConfirmDeleteState(null);
+        }}
+      />
     </div>
   );
 }
