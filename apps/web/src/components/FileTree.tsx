@@ -30,6 +30,7 @@ export interface FileTreeProps {
   readonly onCancelCreate?: () => void;
   readonly onDeleteItem?: (id: string, type: "file" | "folder") => void;
   readonly onRenameItem?: (id: string, newName: string, type: "file" | "folder") => void;
+  readonly onMoveItem?: (id: string, targetParentId: string | null, type: "file" | "folder") => void;
 }
 
 function ActionBtn({
@@ -206,6 +207,12 @@ function InlineCreationInput({
   );
 }
 
+interface DragItemPayload {
+  readonly id: string;
+  readonly type: "file" | "folder";
+  readonly parentId: string | null;
+}
+
 export function FileTree({
   tree,
   activeFileId,
@@ -217,6 +224,7 @@ export function FileTree({
   onCancelCreate,
   onDeleteItem,
   onRenameItem,
+  onMoveItem,
 }: FileTreeProps) {
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => {
     const ids = new Set<string>();
@@ -233,6 +241,9 @@ export function FileTree({
   });
 
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+  const [isDragOverRoot, setIsDragOverRoot] = useState(false);
 
   useEffect(() => {
     if (creatingItem?.parentId) {
@@ -252,14 +263,126 @@ export function FileTree({
     });
   }, []);
 
+  const handleDragStart = (e: React.DragEvent, node: WorkspaceNode) => {
+    e.stopPropagation();
+    const payload: DragItemPayload = {
+      id: node.id,
+      type: node.type,
+      parentId: node.parentId,
+    };
+    e.dataTransfer.setData("application/json", JSON.stringify(payload));
+    e.dataTransfer.effectAllowed = "move";
+    setDraggedItemId(node.id);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItemId(null);
+    setDragOverFolderId(null);
+    setIsDragOverRoot(false);
+  };
+
+  const handleFolderDragOver = (e: React.DragEvent, folderId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverFolderId !== folderId && draggedItemId !== folderId) {
+      setDragOverFolderId(folderId);
+    }
+  };
+
+  const handleFolderDragLeave = (e: React.DragEvent, folderId: string) => {
+    e.stopPropagation();
+    if (dragOverFolderId === folderId) {
+      setDragOverFolderId(null);
+    }
+  };
+
+  const handleFolderDrop = (e: React.DragEvent, folder: WorkspaceNode) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverFolderId(null);
+    setDraggedItemId(null);
+    setIsDragOverRoot(false);
+
+    const raw = e.dataTransfer.getData("application/json");
+    if (!raw) {
+      return;
+    }
+
+    try {
+      const data: DragItemPayload = JSON.parse(raw);
+      if (data.id !== folder.id && data.parentId !== folder.id) {
+        onMoveItem?.(data.id, folder.id, data.type);
+        setExpandedFolderIds((prev) => new Set([...prev, folder.id]));
+      }
+    } catch {
+      // Ignore malformed drag payload
+    }
+  };
+
+  const handleRootDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (!isDragOverRoot) {
+      setIsDragOverRoot(true);
+    }
+  };
+
+  const handleRootDragLeave = (e: React.DragEvent) => {
+    if (e.currentTarget === e.target) {
+      setIsDragOverRoot(false);
+    }
+  };
+
+  const handleRootDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOverRoot(false);
+    setDragOverFolderId(null);
+    setDraggedItemId(null);
+
+    const raw = e.dataTransfer.getData("application/json");
+    if (!raw) {
+      return;
+    }
+
+    try {
+      const data: DragItemPayload = JSON.parse(raw);
+      if (data.parentId !== null) {
+        onMoveItem?.(data.id, null, data.type);
+      }
+    } catch {
+      // Ignore malformed drag payload
+    }
+  };
+
   const renderNode = (node: WorkspaceNode, depth: number) => {
+    const isBeingDragged = draggedItemId === node.id;
+
     if (node.type === "folder") {
       const isExpanded = expandedFolderIds.has(node.id);
       const isCreatingInside = creatingItem?.parentId === node.id;
+      const isTargetHovered = dragOverFolderId === node.id && draggedItemId !== node.id;
 
       return (
-        <li key={node.id} role="treeitem" aria-expanded={isExpanded} className="group select-none">
-          <div className="group/row flex items-center justify-between rounded-md py-1 pr-1 hover:bg-slate-800/60 transition-colors">
+        <li
+          key={node.id}
+          role="treeitem"
+          aria-expanded={isExpanded}
+          draggable={renamingId !== node.id}
+          onDragStart={(e) => handleDragStart(e, node)}
+          onDragEnd={handleDragEnd}
+          onDragOver={(e) => handleFolderDragOver(e, node.id)}
+          onDragLeave={(e) => handleFolderDragLeave(e, node.id)}
+          onDrop={(e) => handleFolderDrop(e, node)}
+          className={`group select-none ${isBeingDragged ? "opacity-40" : ""}`}
+        >
+          <div
+            className={`group/row flex items-center justify-between rounded-md py-1 pr-1 transition-colors ${
+              isTargetHovered
+                ? "bg-slate-800 ring-1 ring-tessera-500"
+                : "hover:bg-slate-800/60"
+            }`}
+          >
             <button
               type="button"
               onClick={() => toggleFolder(node.id)}
@@ -283,7 +406,7 @@ export function FileTree({
                 setRenamingId(node.id);
               }}
               style={{ paddingLeft: `${depth * 14 + 4}px` }}
-              className="flex flex-1 items-center gap-2 py-0.5 text-xs font-mono font-medium text-slate-300 hover:text-white outline-none focus-visible:ring-1 focus-visible:ring-tessera-500/50"
+              className="flex flex-1 items-center gap-2 py-0.5 text-xs font-mono font-medium text-slate-300 hover:text-white outline-none focus-visible:ring-1 focus-visible:ring-tessera-500/50 cursor-grab active:cursor-grabbing"
             >
               {isExpanded ? (
                 <ChevronDown className="h-3 w-3 shrink-0 text-slate-400" />
@@ -372,7 +495,15 @@ export function FileTree({
     const isActive = node.id === activeFileId;
 
     return (
-      <li key={node.id} role="treeitem" aria-selected={isActive} className="group/row select-none">
+      <li
+        key={node.id}
+        role="treeitem"
+        aria-selected={isActive}
+        draggable={renamingId !== node.id}
+        onDragStart={(e) => handleDragStart(e, node)}
+        onDragEnd={handleDragEnd}
+        className={`group/row select-none ${isBeingDragged ? "opacity-40" : ""}`}
+      >
         <div
           className={`flex items-center justify-between rounded-md py-1 pr-1 transition-colors ${
             isActive
@@ -397,7 +528,7 @@ export function FileTree({
               setRenamingId(node.id);
             }}
             style={{ paddingLeft: `${depth * 14 + (depth > 0 ? 14 : 4)}px` }}
-            className="flex flex-1 items-center gap-2 py-0.5 text-xs font-mono font-medium outline-none focus-visible:ring-1 focus-visible:ring-tessera-500/50 truncate"
+            className="flex flex-1 items-center gap-2 py-0.5 text-xs font-mono font-medium outline-none focus-visible:ring-1 focus-visible:ring-tessera-500/50 truncate cursor-grab active:cursor-grabbing"
           >
             <FileCode className="h-3.5 w-3.5 shrink-0 text-slate-400" />
             {renamingId === node.id ? (
@@ -438,7 +569,15 @@ export function FileTree({
   }
 
   return (
-    <nav aria-label="File Explorer" className={`overflow-y-auto pb-2 ${className}`}>
+    <nav
+      aria-label="File Explorer"
+      onDragOver={handleRootDragOver}
+      onDragLeave={handleRootDragLeave}
+      onDrop={handleRootDrop}
+      className={`overflow-y-auto pb-2 min-h-full transition-colors ${
+        isDragOverRoot ? "ring-1 ring-inset ring-tessera-500/50 bg-slate-900/30" : ""
+      } ${className}`}
+    >
       <ul role="tree" className="space-y-0.5 pb-1">
         {isCreatingAtRoot && (
           <li className="mb-0.5">
