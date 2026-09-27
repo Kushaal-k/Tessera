@@ -32,6 +32,80 @@ export interface FileTreeProps {
   readonly onRenameItem?: (id: string, newName: string, type: "file" | "folder") => void;
 }
 
+function ActionBtn({
+  title,
+  ariaLabel,
+  onClick,
+  hoverColor = "hover:text-amber-400 hover:bg-amber-400/10",
+  children,
+}: {
+  title: string;
+  ariaLabel: string;
+  onClick: (e: React.MouseEvent) => void;
+  hoverColor?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={ariaLabel}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick(e);
+      }}
+      className={`rounded p-1 text-slate-400 ${hoverColor} transition-colors`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function RenameInput({
+  initialName,
+  isFolder,
+  onCommit,
+  onCancel,
+}: {
+  initialName: string;
+  isFolder?: boolean;
+  onCommit: (val: string) => void;
+  onCancel: () => void;
+}) {
+  return (
+    <input
+      defaultValue={initialName}
+      autoFocus
+      ref={(el) => {
+        if (el) {
+          const dot = initialName.lastIndexOf(".");
+          const selectEnd = !isFolder && dot > 0 ? dot : initialName.length;
+          el.setSelectionRange(0, selectEnd);
+        }
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+      }}
+      onBlur={(e) => {
+        const val = e.target.value.trim();
+        if (val && val !== initialName) {
+          onCommit(val);
+        } else {
+          onCancel();
+        }
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.currentTarget.blur();
+        } else if (e.key === "Escape") {
+          onCancel();
+        }
+      }}
+      className="w-full bg-slate-900 border border-tessera-500 rounded px-1.5 py-0.5 text-xs text-white font-mono outline-none shadow-inner"
+    />
+  );
+}
+
 function InlineCreationInput({
   type,
   depth,
@@ -48,53 +122,38 @@ function InlineCreationInput({
   const [name, setName] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const hasCommittedRef = useRef(false);
+  const committedRef = useRef(false);
 
   useEffect(() => {
     inputRef.current?.focus();
-
-    const handlePointerDownOutside = (e: MouseEvent) => {
+    const handleOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        if (!hasCommittedRef.current) {
+        if (!committedRef.current) {
           onCancel();
         }
       }
     };
-
-    document.addEventListener("mousedown", handlePointerDownOutside);
+    document.addEventListener("mousedown", handleOutside);
     return () => {
-      document.removeEventListener("mousedown", handlePointerDownOutside);
+      document.removeEventListener("mousedown", handleOutside);
     };
   }, [onCancel]);
 
   const trimmed = name.trim();
   const isDuplicate =
     trimmed.length > 0 &&
-    siblingNames.some((sibling) => sibling.toLowerCase() === trimmed.toLowerCase());
+    siblingNames.some((s) => s.toLowerCase() === trimmed.toLowerCase());
 
-  const handleCommit = () => {
-    if (isDuplicate) return;
+  const commit = () => {
+    if (isDuplicate) {
+      return;
+    }
     if (trimmed) {
-      hasCommittedRef.current = true;
+      committedRef.current = true;
       onConfirm(trimmed);
     } else {
       onCancel();
     }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleCommit();
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      onCancel();
-    }
-  };
-
-  const handleBlur = () => {
-    if (hasCommittedRef.current) return;
-    onCancel();
   };
 
   return (
@@ -104,7 +163,7 @@ function InlineCreationInput({
       className="relative flex flex-col my-0.5"
     >
       <div
-        className={`flex items-center gap-2 px-2 py-1 rounded-md border transition-colors ${
+        className={`flex items-center gap-2 px-2 py-1 rounded-md border ${
           isDuplicate
             ? "border-rose-500 bg-rose-950/20"
             : "border-tessera-500 bg-slate-900"
@@ -120,13 +179,24 @@ function InlineCreationInput({
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onBlur={handleBlur}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              onCancel();
+            }
+          }}
+          onBlur={() => {
+            if (!committedRef.current) {
+              onCancel();
+            }
+          }}
           placeholder={type === "folder" ? "folder name" : "file.ts"}
           className="w-full bg-transparent text-xs text-white placeholder-slate-500 outline-none font-mono"
         />
       </div>
-
       {isDuplicate && (
         <div className="mt-1 mb-1 p-1.5 bg-rose-950 border border-rose-800/80 rounded text-[10px] text-rose-200 leading-tight font-sans select-none">
           A {type === "file" ? "file" : "folder"} named '{trimmed}' already exists.
@@ -150,89 +220,42 @@ export function FileTree({
 }: FileTreeProps) {
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => {
     const ids = new Set<string>();
-    const collectFolderIds = (nodes: readonly WorkspaceNode[]) => {
+    const collect = (nodes: readonly WorkspaceNode[]) => {
       for (const node of nodes) {
         if (node.type === "folder") {
           ids.add(node.id);
-          collectFolderIds(node.children);
+          collect(node.children);
         }
       }
     };
-
-    collectFolderIds(tree);
+    collect(tree);
     return ids;
   });
 
   const [renamingId, setRenamingId] = useState<string | null>(null);
 
-  // Auto-expand folder if a file/folder is being created inside it
   useEffect(() => {
     if (creatingItem?.parentId) {
-      setExpandedFolderIds((prev) => {
-        const next = new Set(prev);
-        next.add(creatingItem.parentId!);
-        return next;
-      });
+      setExpandedFolderIds((prev) => new Set([...prev, creatingItem.parentId!]));
     }
   }, [creatingItem]);
 
-  const toggleFolder = useCallback((folderId: string) => {
+  const toggleFolder = useCallback((id: string) => {
     setExpandedFolderIds((prev) => {
       const next = new Set(prev);
-      if (next.has(folderId)) {
-        next.delete(folderId);
+      if (next.has(id)) {
+        next.delete(id);
       } else {
-        next.add(folderId);
+        next.add(id);
       }
       return next;
     });
   }, []);
 
-  const handleFolderKeyDown = (
-    e: React.KeyboardEvent,
-    folderId: string,
-    isExpanded: boolean,
-  ) => {
-    if (e.key === "ArrowRight" && !isExpanded) {
-      e.preventDefault();
-      toggleFolder(folderId);
-    } else if (e.key === "ArrowLeft" && isExpanded) {
-      e.preventDefault();
-      toggleFolder(folderId);
-    } else if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      toggleFolder(folderId);
-    } else if (e.key === "F2") {
-      e.preventDefault();
-      setRenamingId(folderId);
-    }
-  };
-
-  const handleFileKeyDown = (
-    e: React.KeyboardEvent,
-    file: WorkspaceFileNode,
-  ) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      onSelectFile?.(file);
-    } else if (e.key === "F2") {
-      e.preventDefault();
-      setRenamingId(file.id);
-    }
-  };
-
-  const handleDoubleClick = (
-    e: React.MouseEvent,
-    id: string
-  ) => {
-    e.stopPropagation();
-    setRenamingId(id);
-  };
-
   const renderNode = (node: WorkspaceNode, depth: number) => {
     if (node.type === "folder") {
       const isExpanded = expandedFolderIds.has(node.id);
-      const isCreatingInside = creatingItem && creatingItem.parentId === node.id;
+      const isCreatingInside = creatingItem?.parentId === node.id;
 
       return (
         <li key={node.id} role="treeitem" aria-expanded={isExpanded} className="group select-none">
@@ -240,10 +263,27 @@ export function FileTree({
             <button
               type="button"
               onClick={() => toggleFolder(node.id)}
-              onKeyDown={(e) => handleFolderKeyDown(e, node.id, isExpanded)}
-              onDoubleClick={(e) => handleDoubleClick(e, node.id)}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowRight" && !isExpanded) {
+                  e.preventDefault();
+                  toggleFolder(node.id);
+                } else if (e.key === "ArrowLeft" && isExpanded) {
+                  e.preventDefault();
+                  toggleFolder(node.id);
+                } else if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  toggleFolder(node.id);
+                } else if (e.key === "F2") {
+                  e.preventDefault();
+                  setRenamingId(node.id);
+                }
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                setRenamingId(node.id);
+              }}
               style={{ paddingLeft: `${depth * 14 + 4}px` }}
-              className="flex flex-1 items-center gap-2 py-0.5 text-xs font-mono font-medium text-slate-300 hover:text-white outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-tessera-500/50"
+              className="flex flex-1 items-center gap-2 py-0.5 text-xs font-mono font-medium text-slate-300 hover:text-white outline-none focus-visible:ring-1 focus-visible:ring-tessera-500/50"
             >
               {isExpanded ? (
                 <ChevronDown className="h-3 w-3 shrink-0 text-slate-400" />
@@ -256,32 +296,16 @@ export function FileTree({
                 <Folder className="h-3.5 w-3.5 shrink-0 text-slate-400" />
               )}
               {renamingId === node.id ? (
-                <input
-                  type="text"
-                  defaultValue={node.name}
-                  autoFocus
-                  onClick={(e) => e.stopPropagation()}
-                  onBlur={(e) => {
-                    const val = e.target.value.trim();
-                    if (val && val !== node.name) {
-                      onRenameItem?.(node.id, val, "folder");
-                    }
+                <RenameInput
+                  initialName={node.name}
+                  isFolder
+                  onCommit={(newName) => {
+                    onRenameItem?.(node.id, newName, "folder");
                     setRenamingId(null);
                   }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      const val = e.currentTarget.value.trim();
-                      if (val && val !== node.name) {
-                        onRenameItem?.(node.id, val, "folder");
-                      }
-                      setRenamingId(null);
-                    } else if (e.key === "Escape") {
-                      e.preventDefault();
-                      setRenamingId(null);
-                    }
+                  onCancel={() => {
+                    setRenamingId(null);
                   }}
-                  className="w-full bg-slate-900 border border-tessera-500 rounded px-1.5 py-0.5 text-xs text-white font-mono outline-none shadow-inner"
                 />
               ) : (
                 <span className="truncate">{node.name}</span>
@@ -289,42 +313,28 @@ export function FileTree({
             </button>
 
             <div className="opacity-0 group-hover/row:opacity-100 flex items-center gap-0.5 transition-opacity">
-              <button
-                type="button"
+              <ActionBtn
                 title="New File"
-                aria-label={`New file in ${node.name}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRequestCreate?.("file", node.id);
-                }}
-                className="rounded p-1 text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 transition-colors"
+                ariaLabel={`New file in ${node.name}`}
+                onClick={() => onRequestCreate?.("file", node.id)}
               >
                 <FilePlus className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
+              </ActionBtn>
+              <ActionBtn
                 title="New Folder"
-                aria-label={`New folder in ${node.name}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRequestCreate?.("folder", node.id);
-                }}
-                className="rounded p-1 text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 transition-colors"
+                ariaLabel={`New folder in ${node.name}`}
+                onClick={() => onRequestCreate?.("folder", node.id)}
               >
                 <FolderPlus className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
+              </ActionBtn>
+              <ActionBtn
                 title="Delete Folder"
-                aria-label={`Delete ${node.name}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteItem?.(node.id, "folder");
-                }}
-                className="rounded p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition-colors"
+                ariaLabel={`Delete ${node.name}`}
+                hoverColor="hover:text-rose-400 hover:bg-rose-950/40"
+                onClick={() => onDeleteItem?.(node.id, "folder")}
               >
                 <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              </ActionBtn>
             </div>
           </div>
 
@@ -341,11 +351,13 @@ export function FileTree({
                     <InlineCreationInput
                       type={creatingItem.type}
                       depth={depth + 1}
-                      siblingNames={node.children.map((child) => child.name)}
-                      onConfirm={(name) =>
-                        onConfirmCreate?.(name, creatingItem.type, node.id)
-                      }
-                      onCancel={() => onCancelCreate?.()}
+                      siblingNames={node.children.map((c) => c.name)}
+                      onConfirm={(name) => {
+                        onConfirmCreate?.(name, creatingItem.type, node.id);
+                      }}
+                      onCancel={() => {
+                        onCancelCreate?.();
+                      }}
                     />
                   </li>
                 )}
@@ -371,46 +383,33 @@ export function FileTree({
           <button
             type="button"
             onClick={() => onSelectFile?.(node)}
-            onKeyDown={(e) => handleFileKeyDown(e, node)}
-            onDoubleClick={(e) => handleDoubleClick(e, node.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelectFile?.(node);
+              } else if (e.key === "F2") {
+                e.preventDefault();
+                setRenamingId(node.id);
+              }
+            }}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              setRenamingId(node.id);
+            }}
             style={{ paddingLeft: `${depth * 14 + (depth > 0 ? 14 : 4)}px` }}
-            className="flex flex-1 items-center gap-2 py-0.5 text-xs font-mono font-medium outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-tessera-500/50 truncate"
+            className="flex flex-1 items-center gap-2 py-0.5 text-xs font-mono font-medium outline-none focus-visible:ring-1 focus-visible:ring-tessera-500/50 truncate"
           >
             <FileCode className="h-3.5 w-3.5 shrink-0 text-slate-400" />
             {renamingId === node.id ? (
-              <input
-                type="text"
-                defaultValue={node.name}
-                autoFocus
-                ref={(el) => {
-                  if (el) {
-                    const dotIndex = node.name.lastIndexOf(".");
-                    const end = dotIndex > 0 ? dotIndex : node.name.length;
-                    el.setSelectionRange(0, end);
-                  }
-                }}
-                onClick={(e) => e.stopPropagation()}
-                onBlur={(e) => {
-                  const val = e.target.value.trim();
-                  if (val && val !== node.name) {
-                    onRenameItem?.(node.id, val, "file");
-                  }
+              <RenameInput
+                initialName={node.name}
+                onCommit={(newName) => {
+                  onRenameItem?.(node.id, newName, "file");
                   setRenamingId(null);
                 }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    const val = e.currentTarget.value.trim();
-                    if (val && val !== node.name) {
-                      onRenameItem?.(node.id, val, "file");
-                    }
-                    setRenamingId(null);
-                  } else if (e.key === "Escape") {
-                    e.preventDefault();
-                    setRenamingId(null);
-                  }
+                onCancel={() => {
+                  setRenamingId(null);
                 }}
-                className="w-full bg-slate-900 border border-tessera-500 rounded px-1.5 py-0.5 text-xs text-white font-mono outline-none shadow-inner"
               />
             ) : (
               <span className="truncate">{node.name}</span>
@@ -418,18 +417,14 @@ export function FileTree({
           </button>
 
           <div className="opacity-0 group-hover/row:opacity-100 flex items-center gap-0.5 transition-opacity">
-            <button
-              type="button"
+            <ActionBtn
               title="Delete File"
-              aria-label={`Delete ${node.name}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onDeleteItem?.(node.id, "file");
-              }}
-              className="rounded p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition-colors"
+              ariaLabel={`Delete ${node.name}`}
+              hoverColor="hover:text-rose-400 hover:bg-rose-950/40"
+              onClick={() => onDeleteItem?.(node.id, "file")}
             >
               <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            </ActionBtn>
           </div>
         </div>
       </li>
@@ -439,11 +434,7 @@ export function FileTree({
   const isCreatingAtRoot = creatingItem && creatingItem.parentId === null;
 
   if (tree.length === 0 && !isCreatingAtRoot) {
-    return (
-      <div className="px-3 py-4 text-center text-xs text-slate-500">
-        No files in workspace
-      </div>
-    );
+    return <div className="px-3 py-4 text-center text-xs text-slate-500">No files in workspace</div>;
   }
 
   return (
@@ -455,10 +446,12 @@ export function FileTree({
               type={creatingItem.type}
               depth={0}
               siblingNames={tree.map((node) => node.name)}
-              onConfirm={(name) =>
-                onConfirmCreate?.(name, creatingItem.type, null)
-              }
-              onCancel={() => onCancelCreate?.()}
+              onConfirm={(name) => {
+                onConfirmCreate?.(name, creatingItem.type, null);
+              }}
+              onCancel={() => {
+                onCancelCreate?.();
+              }}
             />
           </li>
         )}
