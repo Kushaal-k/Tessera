@@ -96,4 +96,46 @@ describe("Workspace Tree & Hook State Synchronization", () => {
     expect(text1.toString()).toBe("const a = 1; // extra");
     expect(text2.toString()).toBe("const b = 2;");
   });
+
+  it("auto-detects language when creating files with extensions", () => {
+    const ydoc = new Y.Doc();
+    const ws = createWorkspace({ id: "ws-1", name: "Test WS" }, ydoc);
+
+    const tsFile = ws.createFile("index.ts");
+    const pyFile = ws.createFile("script.py");
+    const goFile = ws.createFile("main.go");
+    const rsFile = ws.createFile("main.rs");
+    const cppFile = ws.createFile("app.cpp");
+    const unknownFile = ws.createFile("notes.unknown");
+
+    expect(tsFile.file?.language).toBe("typescript");
+    expect(pyFile.file?.language).toBe("python");
+    expect(goFile.file?.language).toBe("go");
+    expect(rsFile.file?.language).toBe("rust");
+    expect(cppFile.file?.language).toBe("cpp");
+    expect(unknownFile.file?.language).toBe("plaintext");
+  });
+
+  it("prevents creating duplicate sibling files or folders under the same parent", () => {
+    const ydoc = new Y.Doc();
+    const ws = createWorkspace({ id: "ws-1", name: "Test WS" }, ydoc);
+
+    const file1 = ws.createFile("main.ts");
+    expect(file1.success).toBe(true);
+
+    const duplicateFile = ws.createFile("main.ts");
+    expect(duplicateFile.success).toBe(false);
+    expect(duplicateFile.error).toContain("Duplicate");
+
+    const folder1 = ws.createFolder("components");
+    expect(folder1.success).toBe(true);
+
+    const duplicateFolder = ws.createFolder("components");
+    expect(duplicateFolder.success).toBe(false);
+    expect(duplicateFolder.error).toContain("Duplicate");
+
+    // Creating inside the subfolder with same name as root is allowed
+    const nestedFile = ws.createFile("main.ts", { parentId: folder1.folder!.id });
+    expect(nestedFile.success).toBe(true);
+  });
 });

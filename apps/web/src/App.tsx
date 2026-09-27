@@ -141,6 +141,22 @@ export function App() {
     setCreatingItem(null);
   }, []);
 
+  const handleDeleteItem = useCallback(
+    (id: string, type: "file" | "folder") => {
+      if (!workspace) return;
+      if (type === "file") {
+        workspace.deleteFile(id);
+        if (activeFileId === id) {
+          const remaining = files.filter((f) => f.id !== id);
+          setActiveFileId(remaining[0]?.id ?? null);
+        }
+      } else {
+        workspace.deleteFolder(id);
+      }
+    },
+    [workspace, activeFileId, files],
+  );
+
   const handleRunCode = () => {
     if (!socket || !activeYText || isRunning) return;
     setIsRunning(true);
@@ -278,8 +294,10 @@ export function App() {
               activeFileId={activeFileId}
               onSelectFile={handleSelectFile}
               creatingItem={creatingItem}
+              onRequestCreate={(type, parentId) => setCreatingItem({ type, parentId })}
               onConfirmCreate={handleConfirmCreate}
               onCancelCreate={handleCancelCreate}
+              onDeleteItem={handleDeleteItem}
             />
           </div>
 
