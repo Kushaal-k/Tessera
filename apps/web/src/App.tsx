@@ -242,6 +242,24 @@ export function App() {
     [workspace],
   );
 
+  const handleMoveItem = useCallback(
+    (id: string, targetParentId: string | null, type: "file" | "folder") => {
+      if (!workspace) {
+        return;
+      }
+
+      const result =
+        type === "folder"
+          ? workspace.moveFolder(id, targetParentId)
+          : workspace.moveFile(id, targetParentId);
+
+      if (!result.success) {
+        console.warn("Failed to move item:", result.error);
+      }
+    },
+    [workspace],
+  );
+
   const handleRunCode = () => {
     if (!socket || !activeYText || isRunning) {
       return;
@@ -377,6 +395,7 @@ export function App() {
               onCancelCreate={() => setCreatingItem(null)}
               onDeleteItem={handleDeleteItem}
               onRenameItem={handleRenameItem}
+              onMoveItem={handleMoveItem}
             />
           </div>
 

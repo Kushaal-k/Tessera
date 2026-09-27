@@ -193,4 +193,44 @@ describe("Workspace Tree & Hook State Synchronization", () => {
     expect(ws.getFolders().length).toBe(0);
     expect(ws.getFiles().some((f) => f.id === nestedFile.file!.id)).toBe(false);
   });
+
+  it("moves files and folders between directories and enforces cycle and conflict prevention", () => {
+    const ydoc = new Y.Doc();
+    const ws = createWorkspace({ id: "ws-1", name: "Test WS" }, ydoc);
+
+    const folderA = ws.createFolder("folderA");
+    const folderB = ws.createFolder("folderB");
+    const file1 = ws.createFile("app.ts", { parentId: folderA.folder!.id });
+    const file2 = ws.createFile("dup.ts", { parentId: folderA.folder!.id });
+    ws.createFile("dup.ts", { parentId: folderB.folder!.id });
+
+    // Moving file from folderA to folderB succeeds
+    const moveFileRes = ws.moveFile(file1.file!.id, folderB.folder!.id);
+    expect(moveFileRes.success).toBe(true);
+    expect(ws.getFile(file1.file!.id)?.parentId).toBe(folderB.folder!.id);
+
+    // Moving file to folderB with conflicting name fails
+    const dupMoveRes = ws.moveFile(file2.file!.id, folderB.folder!.id);
+    expect(dupMoveRes.success).toBe(false);
+    expect(dupMoveRes.error).toContain("already exists");
+
+    // Moving file back to root succeeds
+    const rootMoveRes = ws.moveFile(file1.file!.id, null);
+    expect(rootMoveRes.success).toBe(true);
+    expect(ws.getFile(file1.file!.id)?.parentId).toBeNull();
+
+    // Moving folderA into folderB succeeds
+    const moveFolderRes = ws.moveFolder(folderA.folder!.id, folderB.folder!.id);
+    expect(moveFolderRes.success).toBe(true);
+    expect(ws.getFolder(folderA.folder!.id)?.parentId).toBe(folderB.folder!.id);
+
+    // Moving folderB into folderA fails (cycle prevention)
+    const cycleMoveRes = ws.moveFolder(folderB.folder!.id, folderA.folder!.id);
+    expect(cycleMoveRes.success).toBe(false);
+    expect(cycleMoveRes.error).toContain("descendant");
+
+    // Moving folder into itself fails
+    const selfMoveRes = ws.moveFolder(folderB.folder!.id, folderB.folder!.id);
+    expect(selfMoveRes.success).toBe(false);
+  });
 });
