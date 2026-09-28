@@ -12,12 +12,14 @@ import type {
   SupportedLanguage,
   ExecutionResult,
   WorkspaceFileNode,
+  WorkspaceFile,
 } from "@tessera/shared-types";
 import { useDebouncedValue } from "./hooks/useDebouncedValue.js";
 import { downloadTextFile } from "./utils/downloadUtils.js";
 import { FileTree, type CreatingItemState } from "./components/FileTree.js";
 import { useWorkspace } from "./hooks/useWorkspace.js";
-import { FilePlus, FolderPlus, Download, Play, Loader2 } from "lucide-react";
+import { FilePlus, FolderPlus, Download, Play, Loader2, FileCode } from "lucide-react";
+import { TabBar } from "./components/TabBar.js";
 
 const SYNC_SERVER_URL = "http://localhost:4000";
 const DEFAULT_ROOM = "default-room";
@@ -43,6 +45,7 @@ export function App() {
   const [fontSize, setFontSize] = useState(14);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [creatingItem, setCreatingItem] = useState<CreatingItemState | null>(null);
+  const [openFileIds, setOpenFileIds] = useState<string[]>([]);
   const [confirmDeleteState, setConfirmDeleteState] = useState<{
     id: string;
     name: string;
@@ -61,6 +64,12 @@ export function App() {
 
   const { ydoc, ytext, awareness, connected, socket } = useCollaboration(config);
   const { workspace, tree, files, folders } = useWorkspace(ydoc);
+
+  const openFiles = useMemo(() => {
+    return openFileIds
+      .map((id) => files.find((f) => f.id === id))
+      .filter((f): f is WorkspaceFile => f !== undefined);
+  }, [openFileIds, files]);
 
   const activeYText = useMemo(() => {
     if (!workspace || !activeFileId) {
@@ -112,16 +121,47 @@ export function App() {
       const first = files[0];
       if (first) {
         setActiveFileId(first.id);
+        setOpenFileIds((prev) => (prev.includes(first.id) ? prev : [first.id, ...prev]));
       }
     }
   }, [files, activeFileId]);
 
   const handleSelectFile = useCallback((file: WorkspaceFileNode) => {
     setActiveFileId(file.id);
+    setOpenFileIds((prev) => (prev.includes(file.id) ? prev : [...prev, file.id]));
     if (file.language) {
       setLanguage(file.language as SupportedLanguage);
     }
   }, []);
+
+  const handleCloseTab = useCallback(
+    (fileIdToClose: string) => {
+      setOpenFileIds((prev) => {
+        const index = prev.indexOf(fileIdToClose);
+        if (index === -1) {
+          return prev;
+        }
+        const nextOpen = prev.filter((id) => id !== fileIdToClose);
+
+        if (activeFileId === fileIdToClose) {
+          if (nextOpen.length === 0) {
+            setActiveFileId(null);
+          } else {
+            const nextActiveIndex = index >= nextOpen.length ? nextOpen.length - 1 : index;
+            const nextActiveId = nextOpen[nextActiveIndex]!;
+            setActiveFileId(nextActiveId);
+            const targetFile = files.find((f) => f.id === nextActiveId);
+            if (targetFile?.language) {
+              setLanguage(targetFile.language as SupportedLanguage);
+            }
+          }
+        }
+
+        return nextOpen;
+      });
+    },
+    [activeFileId, files],
+  );
 
   const handleConfirmCreate = useCallback(
     (name: string, type: "file" | "folder", parentId: string | null) => {
@@ -132,6 +172,7 @@ export function App() {
         const res = workspace.createFile(name, { parentId });
         if (res.success && res.file) {
           setActiveFileId(res.file.id);
+          setOpenFileIds((prev) => (prev.includes(res.file!.id) ? prev : [...prev, res.file!.id]));
           if (res.file.language) {
             setLanguage(res.file.language as SupportedLanguage);
           }
@@ -170,10 +211,22 @@ export function App() {
 
       workspace.deleteFolder(folderId);
 
-      if (activeFileId && deletedFileIds.has(activeFileId)) {
-        const remaining = files.filter((f) => !deletedFileIds.has(f.id));
-        setActiveFileId(remaining[0]?.id ?? null);
-      }
+      setOpenFileIds((prev) => {
+        const nextOpen = prev.filter((id) => !deletedFileIds.has(id));
+        if (activeFileId && deletedFileIds.has(activeFileId)) {
+          if (nextOpen.length === 0) {
+            setActiveFileId(null);
+          } else {
+            const nextActiveId = nextOpen[0]!;
+            setActiveFileId(nextActiveId);
+            const targetFile = files.find((f) => f.id === nextActiveId);
+            if (targetFile?.language) {
+              setLanguage(targetFile.language as SupportedLanguage);
+            }
+          }
+        }
+        return nextOpen;
+      });
     },
     [workspace, folders, files, activeFileId],
   );
@@ -185,10 +238,7 @@ export function App() {
       }
       if (type === "file") {
         workspace.deleteFile(id);
-        if (activeFileId === id) {
-          const remaining = files.filter((f) => f.id !== id);
-          setActiveFileId(remaining[0]?.id ?? null);
-        }
+        handleCloseTab(id);
       } else {
         const folder = workspace.getFolder(id);
         if (!folder) {
@@ -225,7 +275,7 @@ export function App() {
         }
       }
     },
-    [workspace, activeFileId, files, folders, performFolderDeletion],
+    [workspace, handleCloseTab, files, folders, performFolderDeletion],
   );
 
   const handleRenameItem = useCallback(
@@ -469,22 +519,43 @@ export function App() {
         </aside>
 
         {/* Editor */}
-        <main className="flex-1 overflow-hidden">
-          {activeYText && awareness ? (
-            <CollaborativeEditor
-              key={activeFileId ?? "default"}
-              ytext={activeYText}
-              awareness={awareness}
-              language={language}
-              showMinimap={showMinimap}
-              fontSize={fontSize}
-            />
-          ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-500 font-medium bg-[var(--color-bg)]">
-              <Loader2 className="animate-spin h-8 w-8 text-tessera-400" />
-              Connecting to collaboration server…
-            </div>
-          )}
+        <main className="flex-1 flex flex-col overflow-hidden">
+          <TabBar
+            openFiles={openFiles}
+            activeFileId={activeFileId}
+            onSelectTab={(id) => {
+              setActiveFileId(id);
+              const targetFile = files.find((f) => f.id === id);
+              if (targetFile?.language) {
+                setLanguage(targetFile.language as SupportedLanguage);
+              }
+            }}
+            onCloseTab={handleCloseTab}
+          />
+
+          <div className="flex-1 overflow-hidden relative">
+            {activeFileId && activeYText && awareness ? (
+              <CollaborativeEditor
+                key={activeFileId}
+                ytext={activeYText}
+                awareness={awareness}
+                language={language}
+                showMinimap={showMinimap}
+                fontSize={fontSize}
+              />
+            ) : openFiles.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-500 font-medium bg-[var(--color-bg)]">
+                <FileCode className="h-10 w-10 text-slate-600 mb-1" />
+                <p className="text-sm">No files open</p>
+                <p className="text-xs text-slate-600">Select a file from the explorer to open it</p>
+              </div>
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-500 font-medium bg-[var(--color-bg)]">
+                <Loader2 className="animate-spin h-8 w-8 text-tessera-400" />
+                Connecting to collaboration server…
+              </div>
+            )}
+          </div>
         </main>
       </div>
 
