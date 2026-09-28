@@ -41,11 +41,7 @@ body {
   flex-direction: column;
 }
 
-button {
-  outline: none;
-}
-
-button:focus {
+button:focus:not(:focus-visible) {
   outline: none;
 }
 
