@@ -22,25 +22,27 @@ export interface UseWorkspaceReturn {
 }
 
 const DEFAULT_WORKSPACE_OPTIONS: CreateWorkspaceOptions = {
-    id: "default-workspace",
-    name: "Workspace",
-}
+  id: "default-workspace",
+  name: "Workspace",
+};
 
 export function useWorkspace(
-    ydoc: Y.Doc | null,
-    options?: UseWorkspaceOptions,
+  ydoc: Y.Doc | null,
+  options?: UseWorkspaceOptions,
 ): UseWorkspaceReturn {
-    const workspace = useMemo(() => {
-        if (!ydoc) return null;
+  const workspace = useMemo(() => {
+    if (!ydoc) {
+      return null;
+    }
 
-        return createWorkspace(
-            {
-                id: options?.id ?? DEFAULT_WORKSPACE_OPTIONS.id,
-                name: options?.name ?? DEFAULT_WORKSPACE_OPTIONS.name,
-            },
-            ydoc,
-        );
-    }, [ydoc, options?.id, options?.name]);
+    return createWorkspace(
+      {
+        id: options?.id ?? DEFAULT_WORKSPACE_OPTIONS.id,
+        name: options?.name ?? DEFAULT_WORKSPACE_OPTIONS.name,
+      },
+      ydoc,
+    );
+  }, [ydoc, options?.id, options?.name]);
 
     const [tree, setTree] = useState<readonly WorkspaceNode[]>(() => 
         workspace ? workspace.buildWorkspaceTree() : []

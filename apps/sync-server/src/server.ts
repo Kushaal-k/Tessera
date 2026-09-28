@@ -13,6 +13,8 @@ import type {
   ExecutionResult,
 } from "@tessera/shared-types";
 
+import { createWorkspace } from "@tessera/collaboration";
+
 interface RoomState {
   readonly doc: Y.Doc;
   readonly awareness: Awareness;
@@ -26,12 +28,53 @@ const REDIS_PORT = Number(process.env["REDIS_PORT"] ?? 6379);
 
 const rooms = new Map<string, RoomState>();
 
+function seedDefaultFiles(doc: Y.Doc): void {
+  const workspace = createWorkspace(
+    {
+      id: "default-workspace",
+      name: "Tessera Project",
+    },
+    doc,
+  );
+
+  if (workspace.getFiles().length === 0) {
+    workspace.createFile("index.js", {
+      initialContent: `// Welcome to Tessera.io!
+console.log("Hello, world! Running on Tessera collaborative platform.");
+
+function greet(name) {
+  return \`Hello, \${name}!\`;
+}
+
+console.log(greet("Developer"));
+`,
+    });
+
+    workspace.createFile("server.js", {
+      initialContent: `// Sample Server
+import http from "node:http";
+
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ status: "running", timestamp: new Date().toISOString() }));
+});
+
+const PORT = 3000;
+console.log(\`Server listening on port \${PORT}\`);
+`,
+    });
+  }
+}
+
 function getOrCreateRoom(roomId: string): RoomState {
   const existing = rooms.get(roomId);
-  if (existing) return existing;
+  if (existing) {
+    return existing;
+  }
 
   const doc = new Y.Doc();
   const awareness = new Awareness(doc);
+  seedDefaultFiles(doc);
   const room: RoomState = { doc, awareness, participants: new Map() };
   rooms.set(roomId, room);
   return room;
