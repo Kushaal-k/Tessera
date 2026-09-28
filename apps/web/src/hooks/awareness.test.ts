@@ -32,7 +32,7 @@ describe("setLocalParticipant — initial write", () => {
   });
 });
 
-describe("setLocalParticipant — dynamic displayName update (issue #23)", () => {
+describe("setLocalParticipant — dynamic displayName update", () => {
   it("reflects an updated displayName when called a second time", () => {
     const ydoc = new Y.Doc();
     const awareness = createAwareness(ydoc);

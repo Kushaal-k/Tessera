@@ -40,7 +40,9 @@ export function CollaborativeEditor({
       registerEditorIntelliSense(monaco);
 
       const model = mountedEditor.getModel();
-      if (!model) return;
+      if (!model) {
+        return;
+      }
 
       bindingRef.current = new MonacoBinding(
         ytext,

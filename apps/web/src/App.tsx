@@ -5,47 +5,35 @@ import {
   useCollaboration,
   createDefaultParticipant,
 } from "./hooks/useCollaboration.js";
-import { isMacOS, getExecutionShortcutText } from "./utils/platformDetection.js";
 import { setLocalParticipant } from "@tessera/collaboration";
 import type {
   SyncConnectionConfig,
-  SupportedLanguage,
-  ExecutionResult,
-  WorkspaceFileNode,
   WorkspaceFile,
 } from "@tessera/shared-types";
 import { useDebouncedValue } from "./hooks/useDebouncedValue.js";
 import { downloadTextFile } from "./utils/downloadUtils.js";
+import { collectDescendantFolderIds } from "./utils/workspaceUtils.js";
 import { FileTree, type CreatingItemState } from "./components/FileTree.js";
 import { useWorkspace } from "./hooks/useWorkspace.js";
-import { FilePlus, FolderPlus, Download, Play, Loader2, FileCode } from "lucide-react";
+import { useTabManager } from "./hooks/useTabManager.js";
+import { useCodeExecution } from "./hooks/useCodeExecution.js";
+import { HeaderToolbar } from "./components/HeaderToolbar.js";
+import { OutputPanel } from "./components/OutputPanel.js";
+import { EditorSettings } from "./components/EditorSettings.js";
 import { TabBar } from "./components/TabBar.js";
+import { FilePlus, FolderPlus, Loader2, FileCode } from "lucide-react";
 
 const SYNC_SERVER_URL = "http://localhost:4000";
 const DEFAULT_ROOM = "default-room";
-
-const FILE_NAMES: Record<SupportedLanguage, string> = {
-  typescript: "main.ts",
-  python: "main.py",
-  cpp: "main.cpp",
-  java: "Main.java",
-  rust: "main.rs",
-  go: "main.go",
-};
 
 export function App() {
   const participant = useMemo(() => createDefaultParticipant(), []);
   const [displayName, setDisplayName] = useState(participant.displayName);
   const debouncedName = useDebouncedValue(displayName, 250);
-  const [language, setLanguage] = useState<SupportedLanguage>("typescript");
-  const [isRunning, setIsRunning] = useState(false);
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
-  const [output, setOutput] = useState<ExecutionResult | null>(null);
   const [showMinimap, setShowMinimap] = useState(true);
   const [fontSize, setFontSize] = useState(14);
-  const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [creatingItem, setCreatingItem] = useState<CreatingItemState | null>(null);
-  const [openFileIds, setOpenFileIds] = useState<string[]>([]);
   const [confirmDeleteState, setConfirmDeleteState] = useState<{
     id: string;
     name: string;
@@ -64,12 +52,16 @@ export function App() {
 
   const { ydoc, ytext, awareness, connected, socket } = useCollaboration(config);
   const { workspace, tree, files, folders } = useWorkspace(ydoc);
-
-  const openFiles = useMemo(() => {
-    return openFileIds
-      .map((id) => files.find((f) => f.id === id))
-      .filter((f): f is WorkspaceFile => f !== undefined);
-  }, [openFileIds, files]);
+  const {
+    activeFileId,
+    openFiles,
+    language,
+    setActiveFileId,
+    handleSelectFile,
+    handleCloseTab,
+    openFile,
+    removeFilesFromTabs,
+  } = useTabManager({ files });
 
   const activeYText = useMemo(() => {
     if (!workspace || !activeFileId) {
@@ -77,6 +69,12 @@ export function App() {
     }
     return workspace.getFileText(activeFileId);
   }, [workspace, activeFileId, ytext]);
+
+  const { isRunning, output, handleRunCode } = useCodeExecution({
+    socket,
+    activeYText,
+    language,
+  });
 
   useEffect(() => {
     if (!awareness) {
@@ -88,81 +86,6 @@ export function App() {
     });
   }, [awareness, participant, debouncedName]);
 
-  useEffect(() => {
-    if (!socket) {
-      return;
-    }
-    const handleResult = (result: ExecutionResult) => {
-      setOutput(result);
-      setIsRunning(false);
-    };
-    socket.on("execution-result", handleResult);
-    return () => {
-      socket.off("execution-result", handleResult);
-    };
-  }, [socket]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const isExec = isMacOS() ? e.metaKey : e.ctrlKey;
-      if (isExec && e.key === "Enter") {
-        e.preventDefault();
-        if (!isRunning && connected) {
-          handleRunCode();
-        }
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [socket, activeYText, isRunning, connected, language]);
-
-  useEffect(() => {
-    if (files.length > 0 && (!activeFileId || !files.some((f) => f.id === activeFileId))) {
-      const first = files[0];
-      if (first) {
-        setActiveFileId(first.id);
-        setOpenFileIds((prev) => (prev.includes(first.id) ? prev : [first.id, ...prev]));
-      }
-    }
-  }, [files, activeFileId]);
-
-  const handleSelectFile = useCallback((file: WorkspaceFileNode) => {
-    setActiveFileId(file.id);
-    setOpenFileIds((prev) => (prev.includes(file.id) ? prev : [...prev, file.id]));
-    if (file.language) {
-      setLanguage(file.language as SupportedLanguage);
-    }
-  }, []);
-
-  const handleCloseTab = useCallback(
-    (fileIdToClose: string) => {
-      setOpenFileIds((prev) => {
-        const index = prev.indexOf(fileIdToClose);
-        if (index === -1) {
-          return prev;
-        }
-        const nextOpen = prev.filter((id) => id !== fileIdToClose);
-
-        if (activeFileId === fileIdToClose) {
-          if (nextOpen.length === 0) {
-            setActiveFileId(null);
-          } else {
-            const nextActiveIndex = index >= nextOpen.length ? nextOpen.length - 1 : index;
-            const nextActiveId = nextOpen[nextActiveIndex]!;
-            setActiveFileId(nextActiveId);
-            const targetFile = files.find((f) => f.id === nextActiveId);
-            if (targetFile?.language) {
-              setLanguage(targetFile.language as SupportedLanguage);
-            }
-          }
-        }
-
-        return nextOpen;
-      });
-    },
-    [activeFileId, files],
-  );
-
   const handleConfirmCreate = useCallback(
     (name: string, type: "file" | "folder", parentId: string | null) => {
       if (!workspace) {
@@ -171,18 +94,14 @@ export function App() {
       if (type === "file") {
         const res = workspace.createFile(name, { parentId });
         if (res.success && res.file) {
-          setActiveFileId(res.file.id);
-          setOpenFileIds((prev) => (prev.includes(res.file!.id) ? prev : [...prev, res.file!.id]));
-          if (res.file.language) {
-            setLanguage(res.file.language as SupportedLanguage);
-          }
+          openFile(res.file);
         }
       } else {
         workspace.createFolder(name, { parentId });
       }
       setCreatingItem(null);
     },
-    [workspace],
+    [workspace, openFile],
   );
 
   const performFolderDeletion = useCallback(
@@ -191,18 +110,7 @@ export function App() {
         return;
       }
 
-      const descendantFolderIds = new Set<string>();
-      const queue = [folderId];
-      while (queue.length > 0) {
-        const current = queue.shift()!;
-        descendantFolderIds.add(current);
-        for (const folder of folders) {
-          if (folder.parentId === current && !descendantFolderIds.has(folder.id)) {
-            queue.push(folder.id);
-          }
-        }
-      }
-
+      const descendantFolderIds = collectDescendantFolderIds(folderId, folders);
       const deletedFileIds = new Set(
         files
           .filter((f) => f.parentId && descendantFolderIds.has(f.parentId))
@@ -210,25 +118,9 @@ export function App() {
       );
 
       workspace.deleteFolder(folderId);
-
-      setOpenFileIds((prev) => {
-        const nextOpen = prev.filter((id) => !deletedFileIds.has(id));
-        if (activeFileId && deletedFileIds.has(activeFileId)) {
-          if (nextOpen.length === 0) {
-            setActiveFileId(null);
-          } else {
-            const nextActiveId = nextOpen[0]!;
-            setActiveFileId(nextActiveId);
-            const targetFile = files.find((f) => f.id === nextActiveId);
-            if (targetFile?.language) {
-              setLanguage(targetFile.language as SupportedLanguage);
-            }
-          }
-        }
-        return nextOpen;
-      });
+      removeFilesFromTabs(deletedFileIds);
     },
-    [workspace, folders, files, activeFileId],
+    [workspace, folders, files, removeFilesFromTabs],
   );
 
   const handleDeleteItem = useCallback(
@@ -245,18 +137,7 @@ export function App() {
           return;
         }
 
-        const descendantFolderIds = new Set<string>();
-        const queue = [id];
-        while (queue.length > 0) {
-          const current = queue.shift()!;
-          descendantFolderIds.add(current);
-          for (const f of folders) {
-            if (f.parentId === current && !descendantFolderIds.has(f.id)) {
-              queue.push(f.id);
-            }
-          }
-        }
-
+        const descendantFolderIds = collectDescendantFolderIds(id, folders);
         const descendantFiles = files.filter(
           (f) => f.parentId && descendantFolderIds.has(f.parentId),
         );
@@ -310,102 +191,35 @@ export function App() {
     [workspace],
   );
 
-  const handleRunCode = () => {
-    if (!socket || !activeYText || isRunning) {
-      return;
-    }
-    setIsRunning(true);
-    setOutput(null);
-    socket.emit("execute-code", { code: activeYText.toString(), language });
-  };
-
-  const handleDownload = () => {
+  const handleDownload = useCallback(() => {
     if (!activeYText) {
       return;
     }
     const activeFile = files.find((f) => f.id === activeFileId);
-    downloadTextFile(activeYText.toString(), activeFile?.name || FILE_NAMES[language]);
-  };
+    downloadTextFile(activeYText.toString(), activeFile?.name ?? "untitled.txt");
+  }, [activeYText, files, activeFileId]);
+
+  const activeFileName = useMemo(() => {
+    const activeFile = files.find((f: WorkspaceFile) => f.id === activeFileId);
+    return activeFile?.name ?? null;
+  }, [files, activeFileId]);
 
   return (
     <div className="flex h-screen flex-col bg-[var(--color-bg)]">
-      {/* Header */}
-      <header className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-2 bg-[var(--color-surface)]">
-        <h1 className="text-lg font-semibold tracking-tight text-white">
-          Tessera<span className="text-tessera-500">.io</span>
-        </h1>
+      <HeaderToolbar
+        language={language}
+        onLanguageChange={() => {
+          // Language is now derived from the active file; manual override is display-only
+        }}
+        connected={connected}
+        isRunning={isRunning}
+        onRunCode={handleRunCode}
+        onDownload={handleDownload}
+        canDownload={activeYText !== null}
+        onOpenAiPanel={() => setIsAiPanelOpen(true)}
+        activeFileName={activeFileName}
+      />
 
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400">Language:</span>
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value as SupportedLanguage)}
-              className="bg-[var(--color-bg)] text-sm text-white border border-[var(--color-border)] rounded px-2 py-1 focus:outline-none focus:border-tessera-500 font-medium"
-            >
-              <option value="typescript">TypeScript</option>
-              <option value="python">Python</option>
-              <option value="cpp">C++</option>
-              <option value="java">Java</option>
-              <option value="rust">Rust</option>
-              <option value="go">Go</option>
-            </select>
-          </div>
-
-          <button
-            onClick={handleRunCode}
-            disabled={!connected || isRunning}
-            title={`Run code (${getExecutionShortcutText()})`}
-            className={`flex items-center gap-1.5 px-3 py-1 text-sm font-semibold rounded transition shadow-sm ${
-              isRunning
-                ? "bg-slate-700 text-slate-400 cursor-not-allowed"
-                : !connected
-                  ? "bg-slate-800 text-slate-500 cursor-not-allowed"
-                  : "bg-tessera-600 hover:bg-tessera-500 text-white cursor-pointer active:scale-95"
-            }`}
-          >
-            {isRunning ? (
-              <>
-                <Loader2 className="animate-spin h-3.5 w-3.5 text-slate-400" />
-                Running...
-              </>
-            ) : (
-              <>
-                <Play className="h-3 w-3 fill-current" />
-                Run
-              </>
-            )}
-          </button>
-
-          <button
-            onClick={handleDownload}
-            disabled={!ytext}
-            className="flex items-center justify-center p-1.5 text-slate-400 hover:text-white hover:bg-[var(--color-bg)] rounded transition"
-            title={`Download ${FILE_NAMES[language]}`}
-          >
-            <Download className="h-4 w-4" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsAiPanelOpen(true)}
-            className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1 text-sm font-semibold text-slate-200 transition hover:border-tessera-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-tessera-500"
-          >
-            AI Panel
-          </button>
-
-          <div className="flex items-center gap-2 border-l border-[var(--color-border)] pl-4">
-            <span
-              className={`inline-block h-2 w-2 rounded-full ${connected ? "bg-emerald-400" : "bg-red-400 animate-pulse"}`}
-            />
-            <span className="text-xs text-slate-400 font-medium">
-              {connected ? "Connected" : "Disconnected"}
-            </span>
-          </div>
-        </div>
-      </header>
-
-      {/* Main content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
         <aside className="w-56 shrink-0 border-r border-[var(--color-border)] bg-[var(--color-surface)] p-3 flex flex-col gap-4">
@@ -471,51 +285,12 @@ export function App() {
             </div>
           </div>
 
-          <div className="mt-auto border-t border-[var(--color-border)] pt-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
-              Editor Settings
-            </p>
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <label htmlFor="minimap-toggle" className="text-xs font-medium text-slate-300 cursor-pointer select-none">
-                  Show Minimap
-                </label>
-                <label htmlFor="minimap-toggle" className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    id="minimap-toggle"
-                    checked={showMinimap}
-                    onChange={(e) => setShowMinimap(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-9 h-5 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-tessera-600"></div>
-                </label>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-300">Font Size</span>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => setFontSize((prev) => Math.max(10, prev - 1))}
-                    disabled={fontSize <= 10}
-                    className="w-6 h-6 flex items-center justify-center rounded border border-[var(--color-border)] bg-[var(--color-bg)] text-xs text-slate-300 hover:text-white disabled:opacity-40 select-none transition-all active:scale-95"
-                  >
-                    A-
-                  </button>
-                  <span className="text-xs font-mono font-medium text-slate-200 min-w-[28px] text-center">
-                    {fontSize}px
-                  </span>
-                  <button
-                    onClick={() => setFontSize((prev) => Math.min(24, prev + 1))}
-                    disabled={fontSize >= 24}
-                    className="w-6 h-6 flex items-center justify-center rounded border border-[var(--color-border)] bg-[var(--color-bg)] text-xs text-slate-300 hover:text-white disabled:opacity-40 select-none transition-all active:scale-95"
-                  >
-                    A+
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <EditorSettings
+            showMinimap={showMinimap}
+            onShowMinimapChange={setShowMinimap}
+            fontSize={fontSize}
+            onFontSizeChange={setFontSize}
+          />
         </aside>
 
         {/* Editor */}
@@ -523,13 +298,7 @@ export function App() {
           <TabBar
             openFiles={openFiles}
             activeFileId={activeFileId}
-            onSelectTab={(id) => {
-              setActiveFileId(id);
-              const targetFile = files.find((f) => f.id === id);
-              if (targetFile?.language) {
-                setLanguage(targetFile.language as SupportedLanguage);
-              }
-            }}
+            onSelectTab={setActiveFileId}
             onCloseTab={handleCloseTab}
           />
 
@@ -559,49 +328,12 @@ export function App() {
         </main>
       </div>
 
-      {/* Output panel */}
-      <div className="h-56 shrink-0 border-t border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col p-3 overflow-hidden">
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-2 mb-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-            Execution Output
-          </p>
-          {output && (
-            <div className="flex gap-4 text-xs font-medium">
-              <span className={output.status === "completed" ? "text-emerald-400" : "text-rose-400"}>
-                Status: {output.status}
-              </span>
-              <span className="text-slate-400">Duration: {output.durationMs}ms</span>
-              {output.exitCode !== null && (
-                <span className={output.exitCode === 0 ? "text-emerald-400" : "text-rose-400"}>
-                  Exit Code: {output.exitCode}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-        <div className="flex-1 overflow-y-auto font-mono text-xs p-2 rounded bg-[var(--color-bg)] border border-[var(--color-border)]">
-          {isRunning ? (
-            <span className="text-tessera-400 animate-pulse">Running execution sandbox...</span>
-          ) : output ? (
-            <div className="space-y-1 whitespace-pre-wrap">
-              {output.stdout && <div className="text-emerald-300">{output.stdout}</div>}
-              {output.stderr && <div className="text-rose-400 font-semibold">{output.stderr}</div>}
-              {!output.stdout && !output.stderr && (
-                <div className="text-slate-500 italic">
-                  No output returned (Process completed with exit code {output.exitCode}).
-                </div>
-              )}
-            </div>
-          ) : (
-            <span className="text-slate-500">Ready to execute. Write some code and click "Run".</span>
-          )}
-        </div>
-      </div>
+      <OutputPanel isRunning={isRunning} output={output} />
 
       <SidePanel
         open={isAiPanelOpen}
         title="AI Chat"
-        description={`Context: ${FILE_NAMES[language]}`}
+        description={`Context: ${activeFileName ?? "No file selected"}`}
         onClose={() => setIsAiPanelOpen(false)}
       >
         <div className="rounded border border-dashed border-[var(--color-border)] bg-[var(--color-bg)] p-4 text-sm text-slate-400">
