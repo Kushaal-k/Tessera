@@ -54,6 +54,7 @@ export function App() {
   const { workspace, tree, files, folders } = useWorkspace(ydoc);
   const {
     activeFileId,
+    openFileIds,
     openFiles,
     language,
     setActiveFileId,
@@ -305,12 +306,14 @@ export function App() {
           <div className="flex-1 overflow-hidden relative">
             {activeFileId && activeYText && awareness ? (
               <CollaborativeEditor
-                key={activeFileId}
+                fileId={activeFileId}
+                fileName={activeFileName ?? undefined}
                 ytext={activeYText}
                 awareness={awareness}
                 language={language}
                 showMinimap={showMinimap}
                 fontSize={fontSize}
+                openFileIds={openFileIds}
               />
             ) : openFiles.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-500 font-medium bg-[var(--color-bg)]">
