@@ -38,16 +38,33 @@ def _split_into_chunks(text: str, chunk_size: int) -> list[str]:
     current: list[str] = []
     current_len = 0
 
-    for word in words:
-        if current_len + len(word) + 1 > chunk_size and current:
+    def flush() -> None:
+        nonlocal current, current_len
+        if current:
             chunks.append(" ".join(current))
             current = []
             current_len = 0
+
+    for word in words:
+        # A single token longer than chunk_size can never fit in a normal chunk.
+        # The previous logic appended it whole (the `and current` guard skipped
+        # the split when the chunk was empty), producing a chunk larger than
+        # chunk_size. Hard-split such tokens into chunk_size-sized pieces so every
+        # returned chunk respects the limit — otherwise an oversized chunk would
+        # later exceed the embedding model's token limit. This matters for code
+        # ingestion, where long URLs, base64 blobs, and minified lines are common.
+        if len(word) > chunk_size:
+            flush()
+            for i in range(0, len(word), chunk_size):
+                chunks.append(word[i : i + chunk_size])
+            continue
+
+        if current_len + len(word) + 1 > chunk_size and current:
+            flush()
         current.append(word)
         current_len += len(word) + 1
 
-    if current:
-        chunks.append(" ".join(current))
+    flush()
 
     return chunks
 
