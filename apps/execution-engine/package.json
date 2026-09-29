@@ -4,24 +4,29 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc --project tsconfig.build.json",
-    "dev": "tsx watch src/worker.ts",
-    "start": "node dist/worker.js",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests",
-    "clean": "rm -rf dist",
-    "lint": "echo 'lint not configured yet'",
-    "cleanup": "tsx src/cleanup.ts",
-    "cleanup:docker": "npm run cleanup"
-  },
-  "dependencies": {
-    "@tessera/shared-types": "*",
-    "bullmq": "^5.77.6",
-    "dockerode": "^5.0.0"
-  },
-  "devDependencies": {
-    "@types/dockerode": "^4.0.1",
-    "tsx": "^4.22.3",
-    "typescript": "^6.0.3"
-  }
-}
+  "build": "tsc --project tsconfig.build.json",
+  "dev": "tsx watch src/worker.ts",
+  "start": "node dist/worker.js",
+  "typecheck": "tsc --noEmit",
+  "test": "vitest run --passWithNoTests",
+  "clean": "rm -rf dist",
+  "lint": "eslint src --ext .ts,.js",
+  "lint:fix": "eslint src --ext .ts,.js --fix",
+  "lint:check": "eslint src --ext .ts,.js --format json --output-file lint-report.json",
+  "lint:watch": "eslint src --ext .ts,.js --watch",
+  "cleanup": "tsx src/cleanup.ts",
+  "cleanup:docker": "npm run cleanup"
+},
+"dependencies": {
+  "@tessera/shared-types": "*",
+  "bullmq": "^5.77.6",
+  "dockerode": "^5.0.0"
+},
+"devDependencies": {
+  "@eslint/js": "^9.39.4",
+  "@types/dockerode": "^4.0.1",
+  "eslint": "^9.39.4",
+  "tsx": "^4.22.3",
+  "typescript": "^6.0.3",
+  "typescript-eslint": "^8.62.0"
+}}
