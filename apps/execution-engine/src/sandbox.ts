@@ -5,6 +5,7 @@ import type {
   SandboxConfig,
   SupportedLanguage,
 } from "@tessera/shared-types";
+import * as tar from "tar-stream";
 
 const docker = new Dockerode({ socketPath: "/var/run/docker.sock" });
 
@@ -68,7 +69,7 @@ function joinStreams(stdoutChunks: Buffer[], stderrChunks: Buffer[]): DemuxedStr
   };
 }
 
-const LANGUAGE_IMAGES: Record<SupportedLanguage, string> = {
+export const LANGUAGE_IMAGES: Record<SupportedLanguage, string> = {
   typescript: "node:20-slim",
   python: "python:3.12-slim",
   cpp: "gcc:14",
@@ -77,20 +78,23 @@ const LANGUAGE_IMAGES: Record<SupportedLanguage, string> = {
   go: "golang:1.20-alpine",
 };
 
-const LANGUAGE_COMMANDS: Record<
+export const LANGUAGE_COMPILE_COMMANDS: Record<string, string[]> = {
+  cpp: ["sh", "-c", "g++ -o /tmp/main /tmp/main.cpp && /tmp/main"],
+  java: ["sh", "-c", "javac /tmp/Main.java && java -cp /tmp Main"],
+  rust: ["sh", "-c", "rustc /tmp/main.rs -o /tmp/main && /tmp/main"],
+  go: ["sh", "-c", "go build -o /tmp/main /tmp/main.go && /tmp/main"],
+};
+
+export const LANGUAGE_COMMANDS: Record<
   SupportedLanguage,
   (code: string) => string[]
 > = {
   typescript: (code) => ["node", "--input-type=module", "-e", code],
   python: (code) => ["python3", "-c", code],
-  cpp: (code) => ["sh", "-c", `echo '${code.replace(/'/g, "'\\''")}' > /tmp/main.cpp && g++ -o /tmp/main /tmp/main.cpp && /tmp/main`],
-  java: (code) => ["sh", "-c", `echo '${code.replace(/'/g, "'\\''")}' > /tmp/Main.java && javac /tmp/Main.java -d /tmp && java -cp /tmp Main`],
-  rust: (code) => ["sh", "-c", `echo '${code.replace(/'/g, "'\\''")}' > /tmp/main.rs && rustc /tmp/main.rs -o /tmp/main && /tmp/main`],
-  go: (code) => [
-  "sh",
-  "-c",
-  `echo '${code.replace(/'/g, "'\\''")}' > /tmp/main.go && go run /tmp/main.go`,
-],
+  cpp: () => LANGUAGE_COMPILE_COMMANDS["cpp"]!,
+  java: () => LANGUAGE_COMPILE_COMMANDS["java"]!,
+  rust: () => LANGUAGE_COMPILE_COMMANDS["rust"]!,
+  go: () => LANGUAGE_COMPILE_COMMANDS["go"]!,
 };
 
 const DEFAULT_MEMORY_LIMIT_MB = 256;
@@ -120,13 +124,36 @@ async function ensureImageExists(image: string): Promise<void> {
     console.log(`[sandbox] pulling docker image: ${image} (this might take a moment)...`);
     const stream = await docker.pull(image);
     await new Promise<void>((resolve, reject) => {
-      docker.modem.followProgress(stream, (err) => {
+      docker.modem.followProgress(stream, (err: Error | null) => {
         if (err) reject(err);
         else resolve();
       });
     });
     console.log(`[sandbox] successfully pulled image: ${image}`);
   }
+}
+
+async function uploadSourceFile(
+  container: Dockerode.Container,
+  filename: string,
+  code: string
+): Promise<void> {
+  const tarPack = tar.pack();
+
+  const tarPromise = new Promise<Buffer>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    tarPack.on("data", (chunk: Buffer) => chunks.push(chunk));
+    tarPack.on("end", () => resolve(Buffer.concat(chunks)));
+    tarPack.on("error", (err: Error) => reject(err));
+  });
+
+  tarPack.entry({ name: filename }, code, (err) => {
+    if (err) tarPack.destroy(err);
+  });
+  tarPack.finalize();
+
+  const tarBuffer = await tarPromise;
+  await container.putArchive(tarBuffer, { path: "/tmp" });
 }
 
 /**
@@ -232,16 +259,23 @@ export async function executeInSandbox(
   };
 
   const image = LANGUAGE_IMAGES[task.language];
-  const cmd = LANGUAGE_COMMANDS[task.language](task.code);
+  const needsFileUpload =
+    task.language === "cpp" ||
+    task.language === "java" ||
+    task.language === "rust" ||
+    task.language === "go";
 
   let container: Dockerode.Container | undefined;
+  let timerId: NodeJS.Timeout | undefined;
 
   try {
     await ensureImageExists(image);
 
     container = await docker.createContainer({
       Image: image,
-      Cmd: cmd,
+      Cmd: needsFileUpload
+        ? ["sleep", String(Math.ceil(task.timeoutMs / 1000) + 5)]
+        : LANGUAGE_COMMANDS[task.language](task.code),
       User: "1000",
       WorkingDir: "/tmp",
       HostConfig: {
@@ -263,12 +297,100 @@ export async function executeInSandbox(
     await container.start();
     console.log(`[sandbox] container started: ${container.id} | timeout: ${task.timeoutMs}ms`);
 
+    if (needsFileUpload) {
+      const filename =
+        task.language === "cpp"
+          ? "main.cpp"
+          : task.language === "java"
+            ? "Main.java"
+            : task.language === "rust"
+              ? "main.rs"
+              : "main.go";
+
+      await uploadSourceFile(container, filename, task.code);
+      console.log(`[sandbox] source file uploaded: ${filename} | container: ${container.id}`);
+
+      const compileCmd = LANGUAGE_COMPILE_COMMANDS[task.language]!;
+      const exec = await container.exec({
+        Cmd: compileCmd,
+        AttachStdout: true,
+        AttachStderr: true,
+        User: "1000",
+      });
+
+      const execStream = await exec.start({ hijack: true, stdin: false });
+
+      const stdoutChunks: Buffer[] = [];
+      const stderrChunks: Buffer[] = [];
+
+      const timeoutPromise = new Promise<"timeout">((resolve) => {
+        timerId = setTimeout(() => resolve("timeout"), task.timeoutMs);
+      });
+
+      const execPromise = new Promise<void>((resolve, reject) => {
+        docker.modem.demuxStream(
+          execStream,
+          {
+            write: (chunk: Buffer) => {
+              stdoutChunks.push(chunk);
+              return true;
+            },
+          } as any,
+          {
+            write: (chunk: Buffer) => {
+              stderrChunks.push(chunk);
+              return true;
+            },
+          } as any
+        );
+        execStream.on("end", resolve);
+        execStream.on("error", reject);
+      });
+
+      const race = await Promise.race([execPromise, timeoutPromise]);
+
+      if (timerId) clearTimeout(timerId);
+
+      if (race === "timeout") {
+        console.log(`[sandbox] container timed out: ${container.id} | taskId: ${task.id}`);
+        try {
+          await container.stop({ t: 1 });
+        } catch {
+          // already stopped
+        }
+        return {
+          taskId: task.id,
+          status: "timeout",
+          stdout: "",
+          stderr: `Execution timed out after ${String(task.timeoutMs)}ms`,
+          exitCode: null,
+          durationMs: performance.now() - startTime,
+        };
+      }
+
+      const execInspect = await exec.inspect();
+      const exitCode = execInspect.ExitCode ?? null;
+      console.log(`[sandbox] container completed: ${container.id} | exitCode: ${exitCode} | duration: ${(performance.now() - startTime).toFixed(2)}ms`);
+
+      return {
+        taskId: task.id,
+        status: exitCode === 0 ? "completed" : "failed",
+        stdout: Buffer.concat(stdoutChunks).toString("utf-8"),
+        stderr: Buffer.concat(stderrChunks).toString("utf-8"),
+        exitCode,
+        durationMs: performance.now() - startTime,
+      };
+    }
+
+    // typescript / python flow
     const timeoutPromise = new Promise<"timeout">((resolve) => {
-      setTimeout(() => resolve("timeout"), task.timeoutMs);
+      timerId = setTimeout(() => resolve("timeout"), task.timeoutMs);
     });
 
     const waitPromise = container.wait();
     const race = await Promise.race([waitPromise, timeoutPromise]);
+
+    if (timerId) clearTimeout(timerId);
 
     if (race === "timeout") {
       console.log(`[sandbox] container timed out: ${container.id} | taskId: ${task.id}`);
@@ -296,7 +418,7 @@ export async function executeInSandbox(
     console.log(`[sandbox] container completed: ${container.id} | exitCode: ${exitCode} | duration: ${(performance.now() - startTime).toFixed(2)}ms`);
 
     const formattedStderr =
-      task.language === "cpp" && exitCode !== 0
+      (task.language as string) === "cpp" && exitCode !== 0
         ? formatCppCompilerErrors(stderr)
         : stderr;
 
@@ -309,6 +431,7 @@ export async function executeInSandbox(
       durationMs: performance.now() - startTime,
     };
   } catch (err: unknown) {
+    if (timerId) clearTimeout(timerId);
     const message = err instanceof Error ? err.message : String(err);
     return {
       taskId: task.id,

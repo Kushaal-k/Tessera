@@ -17,10 +17,12 @@
   "dependencies": {
     "@tessera/shared-types": "*",
     "bullmq": "^5.77.6",
-    "dockerode": "^5.0.0"
+    "dockerode": "^5.0.0",
+    "tar-stream": "^2.2.0"
   },
   "devDependencies": {
     "@types/dockerode": "^4.0.1",
+    "@types/tar-stream": "3.1.4",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3"
   }
