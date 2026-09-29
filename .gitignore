@@ -47,3 +47,4 @@ coverage/
 *.tsbuildinfo
 *.d.ts.map
 *config.d.ts
+.claude/
