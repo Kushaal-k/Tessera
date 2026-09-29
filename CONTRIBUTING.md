@@ -118,6 +118,36 @@ Add an IntelliSense completion provider in `apps/web/src/` following the existin
 
 ---
 
+## Frequently Asked Questions
+
+1. How do I start contributing to Tessera.io?
+    - Find an open issue.
+    - Comment /claim on the issue.
+    - Wait for the auto-claim bot or the maintainer to assign the issue to you.
+    - Fork the repository and create a new branch.
+    - Implement your changes and submit a Pull Request.
+
+2. Do I need to be assigned before working on an issue?
+    Yes. Contributors should claim issues using the /claim command and wait for assignment confirmation from the auto-claim bot before starting work.
+
+3. What should I do if I encounter merge conflicts?
+    Update your branch with the latest changes from the target branch, resolve conflicts locally, test your changes again, and push the updated branch.
+
+4. How long does Pull Request review take?
+    Review times depend on maintainer availability and project activity. Please be patient and avoid repeatedly requesting reviews.
+
+5. How do I know if my issue claim was successful?
+    The auto-claim bot will assign the issue to you and post a confirmation comment. If you do not receive confirmation, verify that the issue is still available.
+
+6. Can I submit a Pull Request without an issue?
+    For significant changes, it is recommended to claim or create an issue first. Small documentation improvements or minor fixes may be discussed directly through a Pull Request.
+
+7. Can I work on multiple issues at the same time?
+
+    The maximum number of issues a contributor can claim at the same time is 3, contributors are encouraged to complete existing work before claiming additional issues.
+
+---
+
 ## Need Help?
 
 Look for issues tagged with `good first issue` if you're not sure where to start.
