@@ -9,7 +9,7 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "lint": "echo 'lint not configured yet'"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@tessera/shared-types": "*",
@@ -23,7 +23,9 @@
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
+    "eslint": "^9.30.1",
     "tsx": "^4.22.3",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.35.1"
   }
 }
