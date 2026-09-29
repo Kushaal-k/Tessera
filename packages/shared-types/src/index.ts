@@ -9,7 +9,9 @@ export type ExecutionStatus =
 
 export interface ExecutionTask {
   readonly id: string;
-  readonly code: string;
+  readonly code?: string;
+  readonly files?: readonly ExecutionFile[];
+  readonly entrypoint?: string;
   readonly language: SupportedLanguage;
   readonly timeoutMs: number;
   readonly roomId: string;
@@ -23,6 +25,11 @@ export interface ExecutionResult {
   readonly stderr: string;
   readonly exitCode: number | null;
   readonly durationMs: number;
+}
+
+export interface ExecutionFile {
+  readonly path: string;
+  readonly content: string;
 }
 
 export interface CollaborationRoom {
@@ -49,7 +56,9 @@ export interface SyncClientToServerEvents {
   readonly "sync-update": (update: Uint8Array) => void;
   readonly "awareness-update": (update: Uint8Array) => void;
   readonly "execute-code": (payload: {
-    readonly code: string;
+    readonly code?: string;
+    readonly files?: readonly ExecutionFile[];
+    readonly entrypoint?: string;
     readonly language: SupportedLanguage;
   }) => void;
 }

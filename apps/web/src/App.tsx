@@ -75,6 +75,10 @@ export function App() {
     socket,
     activeYText,
     language,
+    workspace,
+    files,
+    folders,
+    activeFileId,
   });
 
   useEffect(() => {
