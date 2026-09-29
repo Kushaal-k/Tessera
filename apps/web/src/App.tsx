@@ -23,7 +23,9 @@ import { EditorSettings } from "./components/EditorSettings.js";
 import { TabBar } from "./components/TabBar.js";
 import { FilePlus, FolderPlus, Loader2, FileCode } from "lucide-react";
 
-const SYNC_SERVER_URL = "http://localhost:4000";
+const DEFAULT_SYNC_SERVER_URL = "http://localhost:4000";
+const SYNC_SERVER_URL =
+  import.meta.env.VITE_SYNC_SERVER_URL ?? DEFAULT_SYNC_SERVER_URL;
 const DEFAULT_ROOM = "default-room";
 
 export function App() {
