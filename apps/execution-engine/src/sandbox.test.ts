@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { demuxDockerStream } from "./sandbox.js";
+import tar from "tar-stream";
+import { demuxDockerStream, createWorkspaceArchive } from "./sandbox.js";
 
 const STREAM_STDOUT = 1;
 const STREAM_STDERR = 2;
@@ -71,3 +72,50 @@ describe("demuxDockerStream", () => {
     expect(stdout.startsWith("complete\n")).toBe(true);
   });
 });
+
+describe("createWorkspaceArchive", () => {
+  it("packs multiple files into a valid tarball buffer with normalized paths", async () => {
+    const files = [
+      { path: "main.py", content: "print('hello')" },
+      { path: "utils/helper.py", content: "def add(a, b): return a + b" },
+      { path: "/src/index.ts", content: "console.log('hi');" },
+    ];
+
+    const buffer = await createWorkspaceArchive(files);
+    expect(buffer).toBeInstanceOf(Buffer);
+    expect(buffer.length).toBeGreaterThan(0);
+
+    const extract = tar.extract();
+    const extractedEntries: Array<{ name: string; content: string }> = [];
+
+    const promise = new Promise<void>((resolve, reject) => {
+      extract.on("entry", (header, stream, next) => {
+        const chunks: Buffer[] = [];
+        stream.on("data", (c) => {
+          chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c as Uint8Array));
+        });
+        stream.on("end", () => {
+          extractedEntries.push({
+            name: header.name,
+            content: Buffer.concat(chunks).toString("utf-8"),
+          });
+          next();
+        });
+        stream.on("error", reject);
+      });
+      extract.on("finish", resolve);
+      extract.on("error", reject);
+    });
+
+    extract.end(buffer);
+    await promise;
+
+    expect(extractedEntries).toHaveLength(3);
+    expect(extractedEntries).toEqual([
+      { name: "main.py", content: "print('hello')" },
+      { name: "utils/helper.py", content: "def add(a, b): return a + b" },
+      { name: "src/index.ts", content: "console.log('hi');" },
+    ]);
+  });
+});
+

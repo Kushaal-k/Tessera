@@ -26,3 +26,26 @@ export function collectDescendantFolderIds(
 
   return descendantIds;
 }
+
+/**
+ * Resolves the relative path of a file within the workspace folder hierarchy (e.g. "src/utils/helper.ts").
+ */
+export function getRelativeFilePath(
+  file: { name: string; parentId: string | null },
+  folders: readonly WorkspaceFolder[],
+): string {
+  const parts: string[] = [file.name];
+  let currentParentId = file.parentId;
+  const folderMap = new Map(folders.map((f) => [f.id, f]));
+
+  while (currentParentId) {
+    const parentFolder = folderMap.get(currentParentId);
+    if (!parentFolder) {
+      break;
+    }
+    parts.unshift(parentFolder.name);
+    currentParentId = parentFolder.parentId;
+  }
+
+  return parts.join("/");
+}

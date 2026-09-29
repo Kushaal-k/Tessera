@@ -1,13 +1,25 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { Socket } from "socket.io-client";
 import type * as Y from "yjs";
-import type { ExecutionResult, SupportedLanguage } from "@tessera/shared-types";
+import type {
+  ExecutionResult,
+  SupportedLanguage,
+  WorkspaceFile,
+  WorkspaceFolder,
+  ExecutionFile,
+} from "@tessera/shared-types";
+import type { Workspace } from "@tessera/collaboration";
 import { isMacOS } from "../utils/platformDetection.js";
+import { getRelativeFilePath } from "../utils/workspaceUtils.js";
 
 export interface UseCodeExecutionOptions {
   readonly socket: Socket | null;
   readonly activeYText: Y.Text | null;
   readonly language: SupportedLanguage;
+  readonly workspace?: Workspace | null;
+  readonly files?: readonly WorkspaceFile[];
+  readonly folders?: readonly WorkspaceFolder[];
+  readonly activeFileId?: string | null;
 }
 
 export interface UseCodeExecutionReturn {
@@ -20,6 +32,10 @@ export function useCodeExecution({
   socket,
   activeYText,
   language,
+  workspace,
+  files,
+  folders,
+  activeFileId,
 }: UseCodeExecutionOptions): UseCodeExecutionReturn {
   const [isRunning, setIsRunning] = useState(false);
   const [output, setOutput] = useState<ExecutionResult | null>(null);
@@ -39,13 +55,38 @@ export function useCodeExecution({
   }, [socket]);
 
   const handleRunCode = useCallback(() => {
-    if (!socket || !activeYText || isRunning) {
+    if (!socket || isRunning) {
       return;
     }
+
     setIsRunning(true);
     setOutput(null);
-    socket.emit("execute-code", { code: activeYText.toString(), language });
-  }, [socket, activeYText, isRunning, language]);
+
+    if (workspace && files && folders && activeFileId) {
+      const activeFile = files.find((f) => f.id === activeFileId);
+      const executionFiles: ExecutionFile[] = files.map((file) => ({
+        path: getRelativeFilePath(file, folders),
+        content: workspace.getFileText(file.id).toString(),
+      }));
+      const entrypoint = activeFile
+        ? getRelativeFilePath(activeFile, folders)
+        : undefined;
+
+      socket.emit("execute-code", {
+        files: executionFiles,
+        entrypoint,
+        code: activeYText ? activeYText.toString() : undefined,
+        language,
+      });
+    } else if (activeYText) {
+      socket.emit("execute-code", {
+        code: activeYText.toString(),
+        language,
+      });
+    } else {
+      setIsRunning(false);
+    }
+  }, [socket, activeYText, isRunning, language, workspace, files, folders, activeFileId]);
 
   // Stable ref so the keydown listener always calls the latest handler
   const runCodeRef = useRef(handleRunCode);

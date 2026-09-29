@@ -1,9 +1,11 @@
 import Dockerode from "dockerode";
+import tar from "tar-stream";
 import type {
   ExecutionTask,
   ExecutionResult,
   SandboxConfig,
   SupportedLanguage,
+  ExecutionFile,
 } from "@tessera/shared-types";
 
 const docker = new Dockerode({ socketPath: "/var/run/docker.sock" });
@@ -79,18 +81,42 @@ const LANGUAGE_IMAGES: Record<SupportedLanguage, string> = {
 
 const LANGUAGE_COMMANDS: Record<
   SupportedLanguage,
-  (code: string) => string[]
+  (entrypoint: string) => string[]
 > = {
-  typescript: (code) => ["node", "--input-type=module", "-e", code],
-  python: (code) => ["python3", "-c", code],
-  cpp: (code) => ["sh", "-c", `echo '${code.replace(/'/g, "'\\''")}' > /tmp/main.cpp && g++ -o /tmp/main /tmp/main.cpp && /tmp/main`],
-  java: (code) => ["sh", "-c", `echo '${code.replace(/'/g, "'\\''")}' > /tmp/Main.java && javac /tmp/Main.java -d /tmp && java -cp /tmp Main`],
-  rust: (code) => ["sh", "-c", `echo '${code.replace(/'/g, "'\\''")}' > /tmp/main.rs && rustc /tmp/main.rs -o /tmp/main && /tmp/main`],
-  go: (code) => [
-  "sh",
-  "-c",
-  `echo '${code.replace(/'/g, "'\\''")}' > /tmp/main.go && go run /tmp/main.go`,
-],
+  typescript: (entrypoint) => [
+    "node",
+    "--experimental-default-type=module",
+    `/tmp/${entrypoint}`,
+  ],
+  python: (entrypoint) => ["python3", `/tmp/${entrypoint}`],
+  cpp: () => [
+    "sh",
+    "-c",
+    "g++ -o /tmp/main $(find /tmp -name '*.cpp') && /tmp/main",
+  ],
+  java: (entrypoint) => {
+    const mainClass = entrypoint.replace(/\.java$/, "").replace(/^.*\//, "");
+    return [
+      "sh",
+      "-c",
+      `javac $(find /tmp -name '*.java') -d /tmp && java -cp /tmp ${mainClass}`,
+    ];
+  },
+  rust: (entrypoint) => [
+    "sh",
+    "-c",
+    `rustc /tmp/${entrypoint} -o /tmp/main && /tmp/main`,
+  ],
+  go: (entrypoint) => ["sh", "-c", `cd /tmp && go run ${entrypoint}`],
+};
+
+const DEFAULT_ENTRY_POINT: Record<SupportedLanguage, string> = {
+  typescript: "index.ts",
+  python: "main.py",
+  cpp: "main.cpp",
+  java: "Main.java",
+  rust: "main.rs",
+  go: "main.go",
 };
 
 const DEFAULT_MEMORY_LIMIT_MB = 256;
@@ -220,6 +246,24 @@ export function formatCppCompilerErrors(rawLogs: string): string {
   return result.join("\n");
 }
 
+export async function createWorkspaceArchive(files: readonly ExecutionFile[]): Promise<Buffer> {
+  const pack = tar.pack();
+
+  for (const file of files) {
+    const entryPath = file.path.replace(/^\/+/, "");
+    pack.entry({ name: entryPath }, file.content);
+  }
+
+  pack.finalize();
+
+  const chunks: Buffer[] = [];
+  for await (const chunk of pack) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array));
+  }
+
+  return Buffer.concat(chunks);
+}
+
 export async function executeInSandbox(
   task: ExecutionTask
 ): Promise<ExecutionResult> {
@@ -231,8 +275,14 @@ export async function executeInSandbox(
     memoryLimitMb: detectMemoryLimit(),
   };
 
+  const entrypoint = task.entrypoint ?? DEFAULT_ENTRY_POINT[task.language];
+
+  const files: readonly ExecutionFile[] = task.files && task.files.length > 0 ? task.files : [{ path: entrypoint, content: task.code ?? "" }];
+
+  const archive = await createWorkspaceArchive(files);
+
   const image = LANGUAGE_IMAGES[task.language];
-  const cmd = LANGUAGE_COMMANDS[task.language](task.code);
+  const cmd = LANGUAGE_COMMANDS[task.language](entrypoint);
 
   let container: Dockerode.Container | undefined;
 
@@ -250,9 +300,7 @@ export async function executeInSandbox(
         CpuQuota: config.cpuQuota,
         NetworkMode: config.networkDisabled ? "none" : "bridge",
         CapDrop: ["ALL"],
-        ReadonlyRootfs: true,
         SecurityOpt: ["no-new-privileges:true"],
-        Tmpfs: { "/tmp": "size=64M,nosuid" },
         AutoRemove: false,
       },
       NetworkDisabled: config.networkDisabled,
@@ -260,6 +308,7 @@ export async function executeInSandbox(
     });
     console.log(`[sandbox] container created: ${container.id} | language: ${task.language} | taskId: ${task.id}`);
 
+    await container.putArchive(archive, { path: "/tmp" });
     await container.start();
     console.log(`[sandbox] container started: ${container.id} | timeout: ${task.timeoutMs}ms`);
 

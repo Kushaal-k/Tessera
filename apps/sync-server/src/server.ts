@@ -188,6 +188,8 @@ io.on("connection", (socket) => {
       const task: ExecutionTask = {
         id: taskId,
         code: payload.code,
+        files: payload.files,
+        entrypoint: payload.entrypoint,
         language: payload.language,
         timeoutMs: 5000,
         roomId: currentRoomId,
