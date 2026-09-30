@@ -32,6 +32,55 @@ export interface ExecutionFile {
   readonly content: string;
 }
 
+export interface TerminalCreatePayload {
+  readonly sessionId?: string;
+  readonly roomId: string;
+  readonly cols?: number;
+  readonly rows?: number;
+  readonly language?: SupportedLanguage;
+}
+
+export interface TerminalDataPayload {
+  readonly sessionId: string;
+  readonly data: string;
+}
+
+export interface TerminalResizePayload {
+  readonly sessionId: string;
+  readonly cols: number;
+  readonly rows: number;
+}
+
+export interface TerminalKillPayload {
+  readonly sessionId: string;
+}
+
+export interface TerminalOutputPayload {
+  readonly sessionId: string;
+  readonly data: string;
+}
+
+export interface TerminalExitPayload {
+  readonly sessionId: string;
+  readonly exitCode: number | null;
+}
+
+export interface TerminalClientToServerEvents {
+  readonly "terminal:create": (payload: TerminalCreatePayload) => void;
+  readonly "terminal:data": (payload: TerminalDataPayload) => void;
+  readonly "terminal:resize": (payload: TerminalResizePayload) => void;
+  readonly "terminal:kill": (payload: TerminalKillPayload) => void;
+}
+
+export interface TerminalServerToClientEvents {
+  readonly "terminal:created": (payload: { readonly sessionId: string }) => void;
+  readonly "terminal:output": (payload: TerminalOutputPayload) => void;
+  readonly "terminal:exit": (payload: TerminalExitPayload) => void;
+  readonly "terminal:error": (payload: { readonly sessionId?: string; readonly error: string }) => void;
+}
+
+export type TerminalServiceToClientEvents = TerminalServerToClientEvents;
+
 export interface CollaborationRoom {
   readonly roomId: string;
   readonly name: string;
