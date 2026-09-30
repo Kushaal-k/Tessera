@@ -1,12 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import { Terminal as XTerm } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
-import { WebLinksAddon } from "@xterm/addon-web-links";
-import { io, type Socket } from "socket.io-client";
-import type {
-  TerminalClientToServerEvents,
-  TerminalServerToClientEvents,
-} from "@tessera/shared-types";
+import { useState } from "react";
+import { Check, Copy, RotateCcw, Terminal as TerminalIcon, Trash2 } from "lucide-react";
+import { useTerminal } from "../hooks/useTerminal.js";
 import "@xterm/xterm/css/xterm.css";
 
 export interface TerminalProps {
@@ -15,7 +9,7 @@ export interface TerminalProps {
   readonly serverUrl?: string;
 }
 
-const TESSERA_TERMINAL_THEME = {
+export const TESSERA_TERMINAL_THEME = {
   background: "#0f172a", // slate-900 matching Tessera background
   foreground: "#e2e8f0", // slate-200
   cursor: "#38bdf8",     // sky-400 primary accent
@@ -41,148 +35,19 @@ const TESSERA_TERMINAL_THEME = {
 };
 
 export function Terminal({ roomId, className, serverUrl }: TerminalProps) {
-  const terminalContainerRef = useRef<HTMLDivElement>(null);
-  const termRef = useRef<XTerm | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
-  const socketRef = useRef<Socket<
-    TerminalServerToClientEvents,
-    TerminalClientToServerEvents
-  > | null>(null);
-  const sessionIdRef = useRef<string | null>(null);
-  const [status, setStatus] = useState<
-    "connecting" | "connected" | "disconnected" | "error"
-  >("connecting");
+  const { terminalRef, status, restartTerminal, clearBuffer, copyOutput } =
+    useTerminal({ roomId, serverUrl });
+  const [copied, setCopied] = useState<boolean>(false);
 
-  useEffect(() => {
-    const container = terminalContainerRef.current;
-    if (!container) {
-      return;
+  const handleCopy = async (): Promise<void> => {
+    const success = await copyOutput();
+    if (success) {
+      setCopied(true);
+      setTimeout(() => {
+        setCopied(false);
+      }, 1500);
     }
-
-    const term = new XTerm({
-      theme: TESSERA_TERMINAL_THEME,
-      cursorBlink: true,
-      cursorStyle: "bar",
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      fontSize: 13,
-      lineHeight: 1.2,
-      convertEol: true,
-    });
-
-    const fitAddon = new FitAddon();
-    const webLinksAddon = new WebLinksAddon();
-
-    term.loadAddon(fitAddon);
-    term.loadAddon(webLinksAddon);
-
-    term.open(container);
-    try {
-      fitAddon.fit();
-    } catch {
-      // Container may not be sized yet on initial mount
-    }
-
-    termRef.current = term;
-    fitAddonRef.current = fitAddon;
-
-    const targetUrl =
-      serverUrl ??
-      (import.meta.env["VITE_EXECUTION_ENGINE_URL"] as string | undefined) ??
-      "http://localhost:4002";
-
-    const socket: Socket<
-      TerminalServerToClientEvents,
-      TerminalClientToServerEvents
-    > = io(`${targetUrl}/terminal`, {
-      transports: ["websocket", "polling"],
-      autoConnect: true,
-    });
-    socketRef.current = socket;
-
-    socket.on("connect", () => {
-      setStatus("connected");
-      socket.emit("terminal:create", {
-        roomId: roomId ?? "default-room",
-        cols: term.cols,
-        rows: term.rows,
-      });
-    });
-
-    socket.on("terminal:created", ({ sessionId }) => {
-      sessionIdRef.current = sessionId;
-    });
-
-    socket.on("terminal:output", ({ data }) => {
-      term.write(data);
-    });
-
-    socket.on("terminal:exit", ({ exitCode }) => {
-      term.writeln(
-        `\r\n\x1b[33m[Process exited with code ${exitCode ?? "unknown"}]\x1b[0m`
-      );
-      setStatus("disconnected");
-    });
-
-    socket.on("terminal:error", ({ error }) => {
-      term.writeln(`\r\n\x1b[31m[Terminal Error: ${error}]\x1b[0m`);
-      setStatus("error");
-    });
-
-    socket.on("disconnect", () => {
-      setStatus("disconnected");
-    });
-
-    const dataDisposable = term.onData((data) => {
-      if (sessionIdRef.current) {
-        socket.emit("terminal:data", {
-          sessionId: sessionIdRef.current,
-          data,
-        });
-      }
-    });
-
-    let resizeTimeoutId: ReturnType<typeof setTimeout> | null = null;
-    const resizeObserver = new ResizeObserver(() => {
-      if (resizeTimeoutId) {
-        clearTimeout(resizeTimeoutId);
-      }
-      resizeTimeoutId = setTimeout(() => {
-        try {
-          fitAddon.fit();
-          if (sessionIdRef.current && term.cols > 0 && term.rows > 0) {
-            socket.emit("terminal:resize", {
-              sessionId: sessionIdRef.current,
-              cols: term.cols,
-              rows: term.rows,
-            });
-          }
-        } catch {
-          // Ignore resize errors if container is hidden or detached
-        }
-      }, 50);
-    });
-
-    resizeObserver.observe(container);
-
-    return () => {
-      if (resizeTimeoutId) {
-        clearTimeout(resizeTimeoutId);
-      }
-      resizeObserver.disconnect();
-      dataDisposable.dispose();
-
-      if (sessionIdRef.current) {
-        socket.emit("terminal:kill", { sessionId: sessionIdRef.current });
-      }
-      socket.disconnect();
-      term.dispose();
-
-      termRef.current = null;
-      fitAddonRef.current = null;
-      socketRef.current = null;
-      sessionIdRef.current = null;
-    };
-  }, [roomId, serverUrl]);
+  };
 
   return (
     <div
@@ -191,8 +56,60 @@ export function Terminal({ roomId, className, serverUrl }: TerminalProps) {
       }`}
       data-status={status}
     >
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-border,#1e293b)] bg-[var(--color-surface,#0b1120)] text-xs">
+        <div className="flex items-center gap-2">
+          <TerminalIcon className="h-3.5 w-3.5 text-slate-400" />
+          <span className="font-semibold text-slate-300">Terminal</span>
+          <span
+            className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+              status === "connected"
+                ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/40"
+                : status === "connecting"
+                ? "bg-amber-950/60 text-amber-400 border border-amber-800/40 animate-pulse"
+                : "bg-rose-950/60 text-rose-400 border border-rose-800/40"
+            }`}
+          >
+            {status}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => { void handleCopy(); }}
+            title={copied ? "Copied!" : "Copy Output"}
+            aria-label={copied ? "Copied!" : "Copy Output"}
+            className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+          >
+            {copied ? (
+              <Check className="h-3.5 w-3.5 text-emerald-400" />
+            ) : (
+              <Copy className="h-3.5 w-3.5" />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={clearBuffer}
+            title="Clear Buffer"
+            aria-label="Clear Buffer"
+            className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={restartTerminal}
+            title="Restart Terminal"
+            aria-label="Restart Terminal"
+            className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
       <div
-        ref={terminalContainerRef}
+        ref={terminalRef}
         className="flex-1 w-full h-full overflow-hidden p-2"
         data-testid="terminal-container"
       />
