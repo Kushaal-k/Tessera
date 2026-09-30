@@ -35,7 +35,7 @@ export class TerminalRunner {
             new Dockerode({
                 socketPath: process.env["DOCKER_SOCKET_PATH"] ?? "/var/run/docker.sock",
             });
-        this.defaultImage = options.defaultImage ?? "node:24:slim";
+        this.defaultImage = options.defaultImage ?? "node:20-slim";
         this.defaultCols = options.defaultCols ?? 80;
         this.defaultRows = options.defaultRows ?? 24;
     }
