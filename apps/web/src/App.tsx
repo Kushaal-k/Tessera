@@ -18,7 +18,8 @@ import { useWorkspace } from "./hooks/useWorkspace.js";
 import { useTabManager } from "./hooks/useTabManager.js";
 import { useCodeExecution } from "./hooks/useCodeExecution.js";
 import { HeaderToolbar } from "./components/HeaderToolbar.js";
-import { OutputPanel } from "./components/OutputPanel.js";
+import { BottomPanel, type BottomPanelTab } from "./components/BottomPanel.js";
+import { ResizableLayout } from "./components/ResizableLayout.js";
 import { EditorSettings } from "./components/EditorSettings.js";
 import { TabBar } from "./components/TabBar.js";
 import { FilePlus, FolderPlus, Loader2, FileCode } from "lucide-react";
@@ -33,6 +34,7 @@ export function App() {
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
   const [showMinimap, setShowMinimap] = useState(true);
   const [fontSize, setFontSize] = useState(14);
+  const [bottomPanelTab, setBottomPanelTab] = useState<BottomPanelTab>("terminal");
   const [creatingItem, setCreatingItem] = useState<CreatingItemState | null>(null);
   const [confirmDeleteState, setConfirmDeleteState] = useState<{
     id: string;
@@ -209,6 +211,11 @@ export function App() {
     return activeFile?.name ?? null;
   }, [files, activeFileId]);
 
+  const handleRunCodeClick = useCallback(() => {
+    setBottomPanelTab("output");
+    handleRunCode();
+  }, [handleRunCode]);
+
   return (
     <div className="flex h-screen flex-col bg-[var(--color-bg)]">
       <HeaderToolbar
@@ -218,124 +225,132 @@ export function App() {
         }}
         connected={connected}
         isRunning={isRunning}
-        onRunCode={handleRunCode}
+        onRunCode={handleRunCodeClick}
         onDownload={handleDownload}
         canDownload={activeYText !== null}
         onOpenAiPanel={() => setIsAiPanelOpen(true)}
         activeFileName={activeFileName}
       />
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <aside className="w-56 shrink-0 border-r border-[var(--color-border)] bg-[var(--color-surface)] p-3 flex flex-col gap-4">
-          <div className="flex flex-col min-h-0">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                Explorer
-              </span>
-              <div className="flex items-center gap-0.5">
-                <button
-                  type="button"
-                  title="New File"
-                  aria-label="New File"
-                  onClick={() => setCreatingItem({ type: "file", parentId: null })}
-                  className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
-                >
-                  <FilePlus className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  title="New Folder"
-                  aria-label="New Folder"
-                  onClick={() => setCreatingItem({ type: "folder", parentId: null })}
-                  className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
-                >
-                  <FolderPlus className="h-3.5 w-3.5" />
-                </button>
+      <ResizableLayout
+        sidebar={
+          <aside className="w-full h-full border-r border-[var(--color-border)] bg-[var(--color-surface)] p-3 flex flex-col gap-4">
+            <div className="flex flex-col min-h-0">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Explorer
+                </span>
+                <div className="flex items-center gap-0.5">
+                  <button
+                    type="button"
+                    title="New File"
+                    aria-label="New File"
+                    onClick={() => setCreatingItem({ type: "file", parentId: null })}
+                    className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                  >
+                    <FilePlus className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    title="New Folder"
+                    aria-label="New Folder"
+                    onClick={() => setCreatingItem({ type: "folder", parentId: null })}
+                    className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                  >
+                    <FolderPlus className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+              <FileTree
+                tree={tree}
+                activeFileId={activeFileId}
+                onSelectFile={handleSelectFile}
+                creatingItem={creatingItem}
+                onRequestCreate={(type, parentId) => setCreatingItem({ type, parentId })}
+                onConfirmCreate={handleConfirmCreate}
+                onCancelCreate={() => setCreatingItem(null)}
+                onDeleteItem={handleDeleteItem}
+                onRenameItem={handleRenameItem}
+                onMoveItem={handleMoveItem}
+              />
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+                You
+              </p>
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-block h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: participant.cursorColor }}
+                  aria-hidden="true"
+                />
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  maxLength={32}
+                  placeholder="Display name"
+                  aria-label="Your display name"
+                  className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-slate-200 placeholder-slate-500 focus:border-tessera-500 outline-none"
+                />
               </div>
             </div>
-            <FileTree
-              tree={tree}
-              activeFileId={activeFileId}
-              onSelectFile={handleSelectFile}
-              creatingItem={creatingItem}
-              onRequestCreate={(type, parentId) => setCreatingItem({ type, parentId })}
-              onConfirmCreate={handleConfirmCreate}
-              onCancelCreate={() => setCreatingItem(null)}
-              onDeleteItem={handleDeleteItem}
-              onRenameItem={handleRenameItem}
-              onMoveItem={handleMoveItem}
+
+            <EditorSettings
+              showMinimap={showMinimap}
+              onShowMinimapChange={setShowMinimap}
+              fontSize={fontSize}
+              onFontSizeChange={setFontSize}
             />
-          </div>
+          </aside>
+        }
+        editor={
+          <main className="flex-1 flex flex-col h-full overflow-hidden">
+            <TabBar
+              openFiles={openFiles}
+              activeFileId={activeFileId}
+              onSelectTab={setActiveFileId}
+              onCloseTab={handleCloseTab}
+            />
 
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
-              You
-            </p>
-            <div className="flex items-center gap-2">
-              <span
-                className="inline-block h-2 w-2 shrink-0 rounded-full"
-                style={{ backgroundColor: participant.cursorColor }}
-                aria-hidden="true"
-              />
-              <input
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                maxLength={32}
-                placeholder="Display name"
-                aria-label="Your display name"
-                className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-slate-200 placeholder-slate-500 focus:border-tessera-500 outline-none"
-              />
+            <div className="flex-1 overflow-hidden relative">
+              {activeFileId && activeYText && awareness ? (
+                <CollaborativeEditor
+                  fileId={activeFileId}
+                  fileName={activeFileName ?? undefined}
+                  ytext={activeYText}
+                  awareness={awareness}
+                  language={language}
+                  showMinimap={showMinimap}
+                  fontSize={fontSize}
+                  openFileIds={openFileIds}
+                />
+              ) : openFiles.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-500 font-medium bg-[var(--color-bg)]">
+                  <FileCode className="h-10 w-10 text-slate-600 mb-1" />
+                  <p className="text-sm">No files open</p>
+                  <p className="text-xs text-slate-600">Select a file from the explorer to open it</p>
+                </div>
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-500 font-medium bg-[var(--color-bg)]">
+                  <Loader2 className="animate-spin h-8 w-8 text-tessera-400" />
+                  Connecting to collaboration server…
+                </div>
+              )}
             </div>
-          </div>
-
-          <EditorSettings
-            showMinimap={showMinimap}
-            onShowMinimapChange={setShowMinimap}
-            fontSize={fontSize}
-            onFontSizeChange={setFontSize}
+          </main>
+        }
+        bottomPanel={
+          <BottomPanel
+            isRunning={isRunning}
+            output={output}
+            roomId={DEFAULT_ROOM}
+            activeTab={bottomPanelTab}
+            onTabChange={setBottomPanelTab}
           />
-        </aside>
-
-        {/* Editor */}
-        <main className="flex-1 flex flex-col overflow-hidden">
-          <TabBar
-            openFiles={openFiles}
-            activeFileId={activeFileId}
-            onSelectTab={setActiveFileId}
-            onCloseTab={handleCloseTab}
-          />
-
-          <div className="flex-1 overflow-hidden relative">
-            {activeFileId && activeYText && awareness ? (
-              <CollaborativeEditor
-                fileId={activeFileId}
-                fileName={activeFileName ?? undefined}
-                ytext={activeYText}
-                awareness={awareness}
-                language={language}
-                showMinimap={showMinimap}
-                fontSize={fontSize}
-                openFileIds={openFileIds}
-              />
-            ) : openFiles.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-500 font-medium bg-[var(--color-bg)]">
-                <FileCode className="h-10 w-10 text-slate-600 mb-1" />
-                <p className="text-sm">No files open</p>
-                <p className="text-xs text-slate-600">Select a file from the explorer to open it</p>
-              </div>
-            ) : (
-              <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-500 font-medium bg-[var(--color-bg)]">
-                <Loader2 className="animate-spin h-8 w-8 text-tessera-400" />
-                Connecting to collaboration server…
-              </div>
-            )}
-          </div>
-        </main>
-      </div>
-
-      <OutputPanel isRunning={isRunning} output={output} />
+        }
+      />
 
       <SidePanel
         open={isAiPanelOpen}
