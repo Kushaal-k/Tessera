@@ -3,6 +3,7 @@ import type { Job } from "bullmq";
 import type { ExecutionTask, ExecutionResult } from "@tessera/shared-types";
 import { executeInSandbox } from "./sandbox.js";
 import { QUEUE_NAME, createRedisConnectionOptions } from "./queue.js";
+import { startServer } from "./server.js";
 
 const connection = createRedisConnectionOptions();
 
@@ -41,8 +42,18 @@ worker.on("error", (err) => {
 
 console.log(`worker listening on queue: ${QUEUE_NAME}`);
 
-function gracefulShutdown() {
-  console.log("shutting down worker…");
+const serverPromise = startServer().catch((err: unknown) => {
+  console.error("[execution-engine] Failed to start terminal server:", err);
+  return null;
+})
+
+async function gracefulShutdown(): Promise<void> {
+  console.log("shutting down worker and gateway…");
+  const server = await serverPromise;
+
+  if (server) {
+    await server.stop();
+  }
   void worker.close().then(() => process.exit(0));
 }
 

@@ -1,11 +1,7 @@
 import http from "node:http";
 import { Server as SocketIOServer } from "socket.io";
-import { TerminalGateway, type TerminalNamespace } from "./terminalGateway";
-import { TerminalRunner } from "./terminalRunner";
-import type {
-    TerminalClientToServerEvents,
-    TerminalServerToClientEvents,
-} from "@tessera/shared-types"
+import { TerminalGateway, type TerminalNamespace } from "./terminalGateway.js";
+import { TerminalRunner } from "./terminalRunner.js";
 
 export interface ServerOptions {
     readonly port?: number;
@@ -48,7 +44,7 @@ export function createServer(options: ServerOptions = {}): RunningServer {
     });
 
     const runner = options.runner ?? new TerminalRunner();
-    const gateway = new TerminalGateway();
+    const gateway = new TerminalGateway({ runner });
 
     const terminalNamespace = io.of("/terminal") as unknown as TerminalNamespace;
 
