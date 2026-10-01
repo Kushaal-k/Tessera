@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import Dockerode from "dockerode";
 import { WorkspaceStorage } from "./workspaceStorage.js";
 import { FsWatcher, type FsWatchEvent } from "./fsWatcher.js";
+import { WorkspaceSyncBridge } from "./workspaceSyncBridge.js";
 import type { TerminalCreatePayload } from "@tessera/shared-types";
 
 export interface TerminalSessionCallbacks {
@@ -18,6 +19,7 @@ export interface TerminalSession {
     readonly stream: NodeJS.ReadWriteStream;
     readonly callback: TerminalSessionCallbacks;
     readonly watcher?: FsWatcher;
+    readonly bridge?: WorkspaceSyncBridge;
 }
 
 export interface TerminalRunnerOptions {
@@ -26,6 +28,8 @@ export interface TerminalRunnerOptions {
     readonly defaultImage?: string;
     readonly defaultCols?: number;
     readonly defaultRows?: number;
+    readonly syncServerUrl?: string;
+    readonly enableSyncBridge?: boolean;
 }
 
 export class TerminalRunner {
@@ -34,6 +38,8 @@ export class TerminalRunner {
     private readonly defaultImage: string;
     private readonly defaultCols: number;
     private readonly defaultRows: number;
+    private readonly syncServerUrl?: string;
+    private readonly enableSyncBridge: boolean;
     private readonly sessions = new Map<string, TerminalSession>();
 
     constructor(options: TerminalRunnerOptions = {}) {
@@ -45,6 +51,8 @@ export class TerminalRunner {
         this.defaultImage = options.defaultImage ?? "node:20-slim";
         this.defaultCols = options.defaultCols ?? 80;
         this.defaultRows = options.defaultRows ?? 24;
+        this.syncServerUrl = options.syncServerUrl;
+        this.enableSyncBridge = options.enableSyncBridge ?? false;
     }
 
     public getSession(sessionId: string): TerminalSession | undefined {
@@ -114,6 +122,17 @@ export class TerminalRunner {
         }
         watcher.start();
 
+        let bridge: WorkspaceSyncBridge | undefined;
+        if (this.enableSyncBridge) {
+            bridge = new WorkspaceSyncBridge({
+                workspaceId,
+                hostWorkspacePath,
+                storage: this.workspaceStorage,
+                watcher,
+                syncServerUrl: this.syncServerUrl,
+            });
+        }
+
         const session: TerminalSession = {
             sessionId,
             roomId: payload.roomId,
@@ -122,6 +141,7 @@ export class TerminalRunner {
             stream,
             callback: callbacks,
             watcher,
+            bridge,
         };
 
         stream.on("data", (chunk: Buffer | string) => {
@@ -187,6 +207,14 @@ export class TerminalRunner {
                 await session.watcher.stop();
             } catch {
                 // Ignore watcher teardown error
+            }
+        }
+
+        if (session.bridge) {
+            try {
+                await session.bridge.destroy();
+            } catch {
+                // Ignore bridge teardown error
             }
         }
 

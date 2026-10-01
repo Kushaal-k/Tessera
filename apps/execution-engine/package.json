@@ -15,12 +15,15 @@
     "cleanup:docker": "npm run cleanup"
   },
   "dependencies": {
+    "@tessera/collaboration": "*",
     "@tessera/shared-types": "*",
     "bullmq": "^5.77.6",
     "chokidar": "^5.0.0",
     "dockerode": "^5.0.0",
     "socket.io": "^4.8.4",
-    "tar-stream": "^3.2.1"
+    "socket.io-client": "^4.8.4",
+    "tar-stream": "^3.2.1",
+    "yjs": "^13.6.31"
   },
   "devDependencies": {
     "@types/dockerode": "^4.0.1",
