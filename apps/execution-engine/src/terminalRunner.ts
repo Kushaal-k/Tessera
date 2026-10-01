@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import Dockerode from "dockerode";
+import { WorkspaceStorage } from "./workspaceStorage";
 import type { TerminalCreatePayload } from "@tessera/shared-types";
 
 export interface TerminalSessionCallbacks {
@@ -18,6 +19,7 @@ export interface TerminalSession {
 
 export interface TerminalRunnerOptions {
     readonly docker?: Dockerode;
+    readonly workspaceStorage?: WorkspaceStorage;
     readonly defaultImage?: string;
     readonly defaultCols?: number;
     readonly defaultRows?: number;
@@ -25,6 +27,7 @@ export interface TerminalRunnerOptions {
 
 export class TerminalRunner {
     private readonly docker: Dockerode;
+    private readonly workspaceStorage: WorkspaceStorage;
     private readonly defaultImage: string;
     private readonly defaultCols: number;
     private readonly defaultRows: number;
@@ -35,6 +38,7 @@ export class TerminalRunner {
             new Dockerode({
                 socketPath: process.env["DOCKER_SOCKET_PATH"] ?? "/var/run/docker.sock",
             });
+        this.workspaceStorage = options.workspaceStorage ?? new WorkspaceStorage();
         this.defaultImage = options.defaultImage ?? "node:20-slim";
         this.defaultCols = options.defaultCols ?? 80;
         this.defaultRows = options.defaultRows ?? 24;
@@ -55,15 +59,20 @@ export class TerminalRunner {
         const sessionId = payload.sessionId ?? randomUUID();
         const cols = payload.cols ?? this.defaultCols;
         const rows = payload.rows ?? this.defaultRows;
+        const workspaceId = payload.workspaceId ?? payload.roomId;
+
+        await this.workspaceStorage.initWorkspace(workspaceId, payload.initialFiles);
+        const hostWorkspacePath = this.workspaceStorage.getWorkspacePath(workspaceId);
 
         const container = await this.docker.createContainer({
             Image: this.defaultImage,
             Cmd: ["tail", "-f", "/dev/null"],
             User: "1000",
-            WorkingDir: "/tmp",
+            WorkingDir: "/workspace",
             Tty: true,
             OpenStdin: true,
             HostConfig: {
+                Binds: [`${hostWorkspacePath}:/workspace:rw`],
                 CapDrop: ["ALL"],
                 SecurityOpt: ["no-new-privileges:true"],
                 Memory: 256 * 1024 * 1024,
@@ -81,7 +90,7 @@ export class TerminalRunner {
             AttachStderr: true,
             Tty: true,
             User: "1000",
-            WorkingDir: "/tmp",
+            WorkingDir: "/workspace",
         });
 
         const stream = await exec.start({

@@ -38,6 +38,8 @@ export interface TerminalCreatePayload {
   readonly cols?: number;
   readonly rows?: number;
   readonly language?: SupportedLanguage;
+  readonly workspaceId?: string;
+  readonly initialFiles?: readonly ExecutionFile[];
 }
 
 export interface TerminalDataPayload {

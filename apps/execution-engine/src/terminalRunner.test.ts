@@ -47,9 +47,11 @@ describe("TerminalRunner", () => {
     expect(mockDocker.createContainer).toHaveBeenCalledWith(
       expect.objectContaining({
         User: "1000",
+        WorkingDir: "/workspace",
         Tty: true,
         OpenStdin: true,
         HostConfig: expect.objectContaining({
+          Binds: expect.arrayContaining([expect.stringContaining(":/workspace:rw")]),
           CapDrop: ["ALL"],
           SecurityOpt: ["no-new-privileges:true"],
         }),
@@ -61,6 +63,7 @@ describe("TerminalRunner", () => {
         Cmd: ["/bin/sh"],
         Tty: true,
         User: "1000",
+        WorkingDir: "/workspace",
         AttachStdin: true,
         AttachStdout: true,
       })
@@ -69,6 +72,34 @@ describe("TerminalRunner", () => {
     expect(mockExec.resize).toHaveBeenCalledWith({ h: 40, w: 120 });
     expect(runner.getActiveSessionCount()).toBe(1);
     expect(runner.getSession(session.sessionId)).toBeDefined();
+  });
+
+  it("seeds initial workspace files when provided in payload", async () => {
+    const { mockDocker } = createMockDocker();
+    const runner = new TerminalRunner({ docker: mockDocker });
+
+    await runner.createSession(
+      {
+        roomId: "room-seed-test",
+        initialFiles: [
+          { path: "server.js", content: "console.log('started');" },
+        ],
+      },
+      {
+        onData: vi.fn(),
+        onExit: vi.fn(),
+      }
+    );
+
+    expect(mockDocker.createContainer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        HostConfig: expect.objectContaining({
+          Binds: expect.arrayContaining([
+            expect.stringContaining("room-seed-test:/workspace:rw"),
+          ]),
+        }),
+      })
+    );
   });
 
   it("pipes input data to the exec stream", async () => {
