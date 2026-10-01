@@ -96,7 +96,11 @@ export class FsWatcher {
         }
     }
 
-    public shouldSuppress(relativePath: string, content?: string | Buffer): boolean {
+    public shouldSuppress(
+        relativePath: string,
+        content?: string | Buffer,
+        eventType: FsWatchEventType = content === undefined ? "unlink" : "change",
+    ): boolean {
         const normalized = path.normalize(relativePath).replace(/^\/+/, "");
         const tokens = this.pendingTokens.get(normalized);
 
@@ -116,7 +120,7 @@ export class FsWatcher {
 
         // If wildcard exists (e.g. for deletions), consume one-shot
         const wildcardIndex = validTokens.findIndex((t) => t.hash === "*");
-        if (wildcardIndex !== -1) {
+        if (wildcardIndex !== -1 && (eventType === "unlink" || eventType === "unlinkDir")) {
             validTokens.splice(wildcardIndex, 1);
             if (validTokens.length === 0) {
                 this.pendingTokens.delete(normalized);
@@ -180,9 +184,10 @@ export class FsWatcher {
             persistent: true,
             ignoreInitial: true,
             depth: 20,
+            followSymlinks: false,
         });
 
-        const handleRawEvent = async (type: FsWatchEventType, rawPath: string): Promise<void> => {
+        const handleRawEvent = (type: FsWatchEventType, rawPath: string): void => {
             const relative = path.normalize(path.relative(this.rootDir, rawPath));
 
             if (!relative || relative === "." || relative.startsWith("..")) {
@@ -193,55 +198,10 @@ export class FsWatcher {
                 return;
             }
 
-            const absPath = path.resolve(this.rootDir, relative);
-
-            // Symlink containment check
-            try {
-                const lstat = await fs.lstat(absPath);
-                if (lstat.isSymbolicLink()) {
-                    const real = await fs.realpath(absPath);
-                    if (!real.startsWith(this.rootDir + path.sep)) {
-                        return;
-                    }
-                }
-            } catch {
-                // If path doesn't exist anymore, proceed to unlink handling
-            }
-
-            let content: string | undefined;
-            if (type === "add" || type === "change") {
-                try {
-                    const stat = await fs.stat(absPath);
-                    if (stat.isDirectory()) {
-                        return;
-                    }
-                    if (stat.size > this.maxFileSize) {
-                        // Skip reading content for oversized files to prevent OOM
-                        return;
-                    }
-
-                    const buffer = await fs.readFile(absPath);
-                    if (isBinaryBuffer(buffer)) {
-                        // Binary files must not be ingested into text CRDT buffers
-                        return;
-                    }
-
-                    content = buffer.toString("utf-8");
-                } catch {
-                    // File might have been deleted right after event
-                    return;
-                }
-            }
-
-            if (this.shouldSuppress(relative, content)) {
-                return;
-            }
-
             this.dispatchDebounced({
                 type,
                 path: relative,
                 workspaceId: this.workspaceId,
-                content,
             });
         };
 
@@ -274,12 +234,47 @@ export class FsWatcher {
 
         const timer = setTimeout(() => {
             this.debounceTimers.delete(event.path);
-            for (const listener of this.listeners) {
-                listener(event);
-            }
+            void this.dispatchCurrentEvent(event);
         }, this.debounceMs);
 
         this.debounceTimers.set(event.path, timer);
+    }
+
+    private async dispatchCurrentEvent(event: FsWatchEvent): Promise<void> {
+        let content = event.content;
+        if (event.type === "add" || event.type === "change" || event.type === "addDir") {
+            try {
+                const absPath = path.resolve(this.rootDir, event.path);
+                const realPath = await fs.realpath(absPath);
+                if (!realPath.startsWith(this.rootDir + path.sep) ||
+                    isCleanBoundaryIgnored(path.relative(this.rootDir, realPath))) {
+                    return;
+                }
+                const stat = await fs.stat(absPath);
+                if (event.type === "addDir") {
+                    if (!stat.isDirectory()) {
+                        return;
+                    }
+                } else {
+                    if (!stat.isFile() || stat.size > this.maxFileSize) {
+                        return;
+                    }
+                    const buffer = await fs.readFile(absPath);
+                    if (isBinaryBuffer(buffer)) {
+                        return;
+                    }
+                    content = buffer.toString("utf-8");
+                }
+            } catch {
+                return;
+            }
+        }
+        if (!this.watcher || this.shouldSuppress(event.path, content, event.type)) {
+            return;
+        }
+        for (const listener of this.listeners) {
+            listener({ ...event, content });
+        }
     }
 
     public async stop(): Promise<void> {

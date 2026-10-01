@@ -48,6 +48,7 @@ describe("TerminalGateway", () => {
         return {
           sessionId: "session-123",
           roomId: "room-1",
+          workspaceId: "room-1",
           container: {} as any,
           exec: {} as any,
           stream: {} as any,
@@ -221,6 +222,7 @@ describe("TerminalGateway", () => {
     vi.mocked(mockRunner.createSession).mockResolvedValue({
       sessionId: "session-123",
       roomId: "room-1",
+      workspaceId: "room-1",
       container: {} as any,
       exec: {} as any,
       stream: {} as any,
@@ -259,6 +261,7 @@ describe("TerminalGateway", () => {
       .mockResolvedValueOnce({
         sessionId: "session-1",
         roomId: "room-1",
+        workspaceId: "room-1",
         container: {} as any,
         exec: {} as any,
         stream: {} as any,
@@ -267,6 +270,7 @@ describe("TerminalGateway", () => {
       .mockResolvedValueOnce({
         sessionId: "session-2",
         roomId: "room-1",
+        workspaceId: "room-1",
         container: {} as any,
         exec: {} as any,
         stream: {} as any,

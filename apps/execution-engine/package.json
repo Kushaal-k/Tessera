@@ -8,7 +8,7 @@
     "dev": "tsx watch src/worker.ts",
     "start": "node dist/worker.js",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --passWithNoTests src/",
     "clean": "rm -rf dist",
     "lint": "echo 'lint not configured yet'",
     "cleanup": "tsx src/cleanup.ts",

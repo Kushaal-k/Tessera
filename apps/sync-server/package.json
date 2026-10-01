@@ -8,21 +8,23 @@
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run src/",
     "clean": "rm -rf dist",
     "lint": "echo 'lint not configured yet'"
   },
   "dependencies": {
-    "@tessera/shared-types": "*",
     "@tessera/collaboration": "*",
+    "@tessera/shared-types": "*",
+    "bullmq": "^5.77.6",
     "express": "^5.2.1",
-    "socket.io": "^4.8.3",
-    "yjs": "^13.6.31",
-    "y-protocols": "^1.0.7",
     "lib0": "^0.2.117",
-    "bullmq": "^5.77.6"
+    "socket.io": "^4.8.3",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.31"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
+    "socket.io-client": "^4.8.4",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3"
   }

@@ -3,9 +3,11 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as Y from "yjs";
+import { createWorkspace } from "@tessera/collaboration";
 import { WorkspaceSyncBridge, FS_ORIGIN } from "./workspaceSyncBridge.js";
 import { WorkspaceStorage } from "./workspaceStorage.js";
 import { FsWatcher } from "./fsWatcher.js";
+import { getRelativeFolderPath } from "./workspaceSyncUtils.js";
 
 describe("WorkspaceSyncBridge", () => {
     let tempBaseDir: string;
@@ -17,13 +19,34 @@ describe("WorkspaceSyncBridge", () => {
 
     // Mock socket to avoid real network requests in unit tests
     const createMockSocket = () => {
-        return {
+        const listeners = new Map<string, Set<(...args: any[]) => void>>();
+        const socket = {
             connected: true,
-            emit: vi.fn(),
-            on: vi.fn(),
-            off: vi.fn(),
+            emit: vi.fn((event: string) => {
+                if (event === "sync-step-1") {
+                    queueMicrotask(() => {
+                        for (const listener of listeners.get("sync-step-2") ?? []) {
+                            listener(Y.encodeStateAsUpdate(customDoc));
+                        }
+                    });
+                }
+            }),
+            on: vi.fn((event: string, listener: (...args: any[]) => void) => {
+                const callbacks = listeners.get(event) ?? new Set();
+                callbacks.add(listener);
+                listeners.set(event, callbacks);
+            }),
+            off: vi.fn((event: string, listener: (...args: any[]) => void) => {
+                listeners.get(event)?.delete(listener);
+            }),
             disconnect: vi.fn(),
-        } as any;
+            receive: (event: string, ...args: any[]) => {
+                for (const listener of listeners.get(event) ?? []) {
+                    listener(...args);
+                }
+            },
+        };
+        return socket as any;
     };
 
     beforeEach(async () => {
@@ -45,6 +68,7 @@ describe("WorkspaceSyncBridge", () => {
             debounceMs: 50,
         });
 
+        await vi.waitFor(() => expect(bridge.reconciliationPromise).not.toBeNull());
         await bridge.reconciliationPromise;
     });
 
@@ -199,7 +223,103 @@ describe("WorkspaceSyncBridge", () => {
         });
     });
 
+    describe("Folder synchronization", () => {
+        const folderPaths = () => bridge.workspace.getFolders().map((folder) =>
+            getRelativeFolderPath(folder, bridge.workspace.getFolders()),
+        );
+
+        it("imports existing nested empty directories without importing dependencies", async () => {
+            await storage.createFolder(workspaceId, "hello/empty/deep");
+            await storage.createFolder(workspaceId, "node_modules/dependency");
+            await bridge.reconcileInitialState();
+            expect(folderPaths().sort()).toEqual(["hello", "hello/empty", "hello/empty/deep"]);
+            expect(bridge.workspace.getFiles()).toHaveLength(0);
+        });
+
+        it("projects document folders at startup even when they contain no files", async () => {
+            customDoc.transact(() => {
+                const parent = bridge.workspace.createFolder("seeded").folder!;
+                bridge.workspace.createFolder("empty", { parentId: parent.id });
+            }, FS_ORIGIN);
+            await bridge.reconcileInitialState();
+            expect((await storage.listEntries(workspaceId)).folders.sort()).toEqual(["seeded", "seeded/empty"]);
+        });
+
+        it("creates and removes an empty folder changed in the editor", async () => {
+            const folder = bridge.workspace.createFolder("editor-empty").folder!;
+            await vi.waitFor(async () => {
+                expect((await storage.listEntries(workspaceId)).folders).toContain("editor-empty");
+            });
+            bridge.workspace.deleteFolder(folder.id);
+            await vi.waitFor(async () => {
+                expect((await storage.listEntries(workspaceId)).folders).not.toContain("editor-empty");
+            });
+        });
+
+        it("renames and moves nested folders while preserving source and runtime-only files", async () => {
+            watcher.start();
+            await watcher.waitUntilReady();
+            const parent = bridge.workspace.createFolder("project").folder!;
+            const nested = bridge.workspace.createFolder("nested", { parentId: parent.id }).folder!;
+            bridge.workspace.createFolder("empty", { parentId: nested.id });
+            const file = bridge.workspace.createFile("index.js", { parentId: nested.id, initialContent: "source" }).file!;
+            await vi.waitFor(async () => {
+                expect(await storage.readFile(workspaceId, "project/nested/index.js")).toBe("source");
+            });
+            await storage.writeFiles(workspaceId, [{ path: "project/node_modules/dependency.js", content: "runtime only" }]);
+            bridge.workspace.renameFolder(parent.id, "renamed");
+            bridge.workspace.getFileText(file.id).insert(6, " editor change");
+            await vi.waitFor(async () => {
+                expect(await storage.readFile(workspaceId, "renamed/nested/index.js")).toBe("source editor change");
+                expect(await storage.readFile(workspaceId, "renamed/node_modules/dependency.js")).toBe("runtime only");
+                expect((await storage.listEntries(workspaceId)).folders).toContain("renamed/nested/empty");
+            });
+            const destination = bridge.workspace.createFolder("destination").folder!;
+            bridge.workspace.moveFolder(parent.id, destination.id);
+            await vi.waitFor(async () => {
+                expect(await storage.readFile(workspaceId, "destination/renamed/nested/index.js")).toBe("source editor change");
+                expect(await storage.readFile(workspaceId, "destination/renamed/node_modules/dependency.js")).toBe("runtime only");
+            });
+            bridge.workspace.deleteFolder(destination.id);
+            await vi.waitFor(async () => {
+                expect((await storage.listEntries(workspaceId)).folders).toEqual([]);
+                expect((await storage.listEntries(workspaceId)).files).toEqual([]);
+            });
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            expect(folderPaths()).toEqual([]);
+        });
+
+        it("observes terminal folder creation, rename, and deletion", async () => {
+            watcher.start();
+            await watcher.waitUntilReady();
+            await storage.createFolder(workspaceId, "terminal-empty/nested");
+            await vi.waitFor(() => expect(folderPaths()).toContain("terminal-empty/nested"));
+            await storage.renamePath(workspaceId, "terminal-empty", "terminal-renamed");
+            await vi.waitFor(() => {
+                expect(folderPaths()).toContain("terminal-renamed/nested");
+                expect(folderPaths()).not.toContain("terminal-empty");
+            });
+            await storage.deletePath(workspaceId, "terminal-renamed");
+            await vi.waitFor(() => expect(folderPaths()).toEqual([]));
+        });
+    });
+
     describe("Loop Prevention", () => {
+        it("ignores an unchanged disk echo while a newer editor write is pending", async () => {
+            const file = bridge.workspace.createFile("echo.js", { initialContent: "seed" }).file!;
+            await vi.waitFor(async () => {
+                expect(await storage.readFile(workspaceId, "echo.js")).toBe("seed");
+            });
+            bridge.workspace.getFileText(file.id).insert(4, " editor change");
+            for (const listener of (watcher as any).listeners) {
+                listener({ type: "change", path: "echo.js", workspaceId, content: "seed" });
+            }
+            expect(bridge.workspace.getFileContent(file.id)).toBe("seed editor change");
+            await vi.waitFor(async () => {
+                expect(await storage.readFile(workspaceId, "echo.js")).toBe("seed editor change");
+            });
+        });
+
         it("does not trigger outbound disk write when change originated from FS_ORIGIN", async () => {
             const writeSpy = vi.spyOn(storage, "writeFiles");
 
@@ -218,6 +338,37 @@ describe("WorkspaceSyncBridge", () => {
     });
 
     describe("Initial & Reconnect Reconciliation", () => {
+        it("waits for the room document before importing existing disk files", async () => {
+            await bridge.destroy();
+            customDoc = new Y.Doc();
+            const roomDoc = new Y.Doc();
+            const roomWorkspace = createWorkspace({ id: workspaceId, name: "Room" }, roomDoc);
+            const seeded = roomWorkspace.createFile("existing.js", { initialContent: "room content" }).file!;
+            await storage.writeFiles(workspaceId, [{ path: "existing.js", content: "disk content" }]);
+            const socket = createMockSocket();
+            socket.emit.mockImplementation(() => {});
+            bridge = new WorkspaceSyncBridge({
+                workspaceId,
+                hostWorkspacePath: storage.getWorkspacePath(workspaceId),
+                storage,
+                watcher,
+                customDoc,
+                customSocket: socket,
+                debounceMs: 10,
+            });
+            try {
+                expect(bridge.reconciliationPromise).toBeNull();
+                expect(bridge.workspace.getFiles()).toHaveLength(0);
+                socket.receive("sync-step-2", Y.encodeStateAsUpdate(roomDoc));
+                await bridge.reconciliationPromise;
+                expect(bridge.workspace.getFiles()).toHaveLength(1);
+                expect(bridge.workspace.getFileContent(seeded.id)).toBe("disk content");
+                expect(await storage.readFile(workspaceId, "existing.js")).toBe("disk content");
+            } finally {
+                roomDoc.destroy();
+            }
+        });
+
         it("populates disk when Y.Doc already contains files", async () => {
             bridge.workspace.createFile("seed.json", {
                 initialContent: '{"seeded": true}',
