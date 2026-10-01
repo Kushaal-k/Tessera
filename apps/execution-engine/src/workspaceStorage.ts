@@ -115,7 +115,11 @@ export class WorkspaceStorage {
                 await fs.chown(targetPath, 1000, 1000);
             } catch {
                 // Non-root host environments throw EPERM
-                await fs.chmod(targetPath, 0o666);
+                try {
+                    await fs.chmod(targetPath, 0o666);
+                } catch {
+                    // Ignore if file was concurrently removed
+                }
             }
         }
     }
@@ -126,7 +130,11 @@ export class WorkspaceStorage {
         try {
             await fs.chown(targetPath, 1000, 1000);
         } catch {
-            await fs.chmod(targetPath, 0o777);
+            try {
+                await fs.chmod(targetPath, 0o777);
+            } catch {
+                // Ignore if folder was concurrently removed
+            }
         }
         return targetPath;
     }
@@ -155,5 +163,54 @@ export class WorkspaceStorage {
         } catch {
             return false;
         }
+    }
+
+    public async listFiles(workspaceId: string): Promise<string[]> {
+        const workspacePath = this.getWorkspacePath(workspaceId);
+        const results: string[] = [];
+
+        const walk = async (currentDir: string): Promise<void> => {
+            let entries: import("node:fs").Dirent[] = [];
+            try {
+                entries = await fs.readdir(currentDir, { withFileTypes: true });
+            } catch {
+                return;
+            }
+
+            for (const entry of entries) {
+                const fullPath = path.join(currentDir, entry.name);
+                const relPath = path.relative(workspacePath, fullPath);
+
+                if (!relPath || relPath.startsWith("..")) {
+                    continue;
+                }
+
+                if (
+                    entry.name === "node_modules" ||
+                    entry.name === ".git" ||
+                    entry.name === ".npm" ||
+                    entry.name === "dist" ||
+                    entry.name === ".turbo" ||
+                    entry.name === ".cache" ||
+                    entry.name === ".DS_Store"
+                ) {
+                    continue;
+                }
+
+                if (entry.isDirectory()) {
+                    await walk(fullPath);
+                } else if (entry.isFile()) {
+                    results.push(relPath);
+                }
+            }
+        };
+
+        await walk(workspacePath);
+        return results;
+    }
+
+    public async readFile(workspaceId: string, relativePath: string): Promise<string> {
+        const targetPath = this.resolveSafePath(workspaceId, relativePath);
+        return await fs.readFile(targetPath, "utf-8");
     }
 }

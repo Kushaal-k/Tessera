@@ -55,6 +55,8 @@ export class WorkspaceSyncBridge {
     private readonly debounceTimers = new Map<string, NodeJS.Timeout>();
     private currentTransactionOrigin: unknown = null;
     private destroyed = false;
+    private isReconciling = false;
+    public reconciliationPromise: Promise<void> | null = null;
 
     constructor(options: WorkspaceSyncBridgeOptions) {
         this.workspaceId = options.workspaceId;
@@ -102,12 +104,14 @@ export class WorkspaceSyncBridge {
                 roomId: this.workspaceId,
                 participant,
             });
+            this.reconciliationPromise = this.reconcileInitialState();
         } else {
             this.socket.on("connect", () => {
                 this.socket.emit("join-room", {
                     roomId: this.workspaceId,
                     participant,
                 });
+                this.reconciliationPromise = this.reconcileInitialState();
             });
         }
 
@@ -222,6 +226,97 @@ export class WorkspaceSyncBridge {
         }
     }
 
+    public async reconcileInitialState(): Promise<void> {
+        if (this.destroyed) {
+            return;
+        }
+
+        if (this.isReconciling) {
+            return;
+        }
+
+        this.isReconciling = true;
+        try {
+            const diskFiles = await this.storage.listFiles(this.workspaceId);
+            const diskFileSet = new Set(diskFiles);
+            const crdtFiles = this.workspace.getFiles();
+            const folders = this.workspace.getFolders();
+            const crdtFileMap = new Map<string, typeof crdtFiles[0]>();
+
+            for (const file of crdtFiles) {
+                const relPath = getRelativeFilePath(file, folders);
+                crdtFileMap.set(relPath, file);
+            }
+
+            // Case 1: File in CRDT but not on disk -> populate disk
+            for (const [relPath, file] of crdtFileMap.entries()) {
+                if (!diskFileSet.has(relPath)) {
+                    const content = this.workspace.getFileContent(file.id) ?? "";
+                    this.watcher.markRecentWrite(relPath, content);
+                    await this.storage.writeFiles(this.workspaceId, [
+                        { path: relPath, content },
+                    ]);
+                    this.trackedFiles.set(file.id, relPath);
+                    this.attachTextObserver(file.id);
+                }
+            }
+
+            // Case 2: File on disk but not in CRDT -> import into CRDT
+            for (const diskRelPath of diskFiles) {
+                if (!crdtFileMap.has(diskRelPath)) {
+                    try {
+                        const content = await this.storage.readFile(this.workspaceId, diskRelPath);
+                        const parts = diskRelPath.split("/").filter(Boolean);
+                        const fileName = parts.pop();
+                        if (!fileName) {
+                            continue;
+                        }
+                        const parentPath = parts.join("/");
+
+                        this.doc.transact(() => {
+                            const parentId = parentPath
+                                ? ensureFolderHierarchy(parentPath, this.workspace)
+                                : null;
+                            const res = this.workspace.createFile(fileName, {
+                                parentId,
+                                initialContent: content,
+                            });
+                            if (res.success && res.file) {
+                                this.trackedFiles.set(res.file.id, diskRelPath);
+                                this.attachTextObserver(res.file.id);
+                            }
+                        }, FS_ORIGIN);
+                    } catch {
+                        // Ignore unreadable or binary file
+                    }
+                }
+            }
+
+            // Case 3: File exists on both -> reconcile content
+            for (const [relPath, file] of crdtFileMap.entries()) {
+                if (diskFileSet.has(relPath)) {
+                    try {
+                        const diskContent = await this.storage.readFile(this.workspaceId, relPath);
+                        const crdtContent = this.workspace.getFileContent(file.id) ?? "";
+                        if (diskContent !== crdtContent) {
+                            this.doc.transact(() => {
+                                this.workspace.updateFileContent(file.id, diskContent);
+                            }, FS_ORIGIN);
+                        }
+                        this.trackedFiles.set(file.id, relPath);
+                        this.attachTextObserver(file.id);
+                    } catch {
+                        // Ignore
+                    }
+                }
+            }
+        } catch (err: unknown) {
+            console.error(`Reconciliation failed for workspace ${this.workspaceId}:`, err);
+        } finally {
+            this.isReconciling = false;
+        }
+    }
+
     private scheduleDebouncedDiskWrite(fileId: string): void {
         const existingTimer = this.debounceTimers.get(fileId);
         if (existingTimer) {
@@ -264,6 +359,9 @@ export class WorkspaceSyncBridge {
         const ytext = this.workspace.getFileText(fileId);
         const observer = (_event: Y.YTextEvent, transaction: Y.Transaction) => {
             if (transaction.origin === FS_ORIGIN) {
+                return;
+            }
+            if (!this.workspace.hasFile(fileId)) {
                 return;
             }
             this.scheduleDebouncedDiskWrite(fileId);
