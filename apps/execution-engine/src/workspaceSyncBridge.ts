@@ -99,19 +99,22 @@ export class WorkspaceSyncBridge {
             isAI: false,
         };
 
-        if (this.socket.connected) {
+        const joinAndSync = () => {
+            console.log(`[WorkspaceSyncBridge] Joining room ${this.workspaceId} on sync-server`);
             this.socket.emit("join-room", {
                 roomId: this.workspaceId,
                 participant,
             });
+            const stateVector = Y.encodeStateVector(this.doc);
+            this.socket.emit("sync-step-1", stateVector);
             this.reconciliationPromise = this.reconcileInitialState();
+        };
+
+        if (this.socket.connected) {
+            joinAndSync();
         } else {
             this.socket.on("connect", () => {
-                this.socket.emit("join-room", {
-                    roomId: this.workspaceId,
-                    participant,
-                });
-                this.reconciliationPromise = this.reconcileInitialState();
+                joinAndSync();
             });
         }
 
@@ -153,6 +156,8 @@ export class WorkspaceSyncBridge {
         if (!cleanPath) {
             return;
         }
+
+        console.log(`[WorkspaceSyncBridge] Inbound disk event: ${event.type} ${cleanPath}`);
 
         switch (event.type) {
             case "addDir": {
@@ -343,6 +348,7 @@ export class WorkspaceSyncBridge {
                 await this.storage.writeFiles(this.workspaceId, [
                     { path: relPath, content },
                 ]);
+                console.log(`[WorkspaceSyncBridge] Successfully synced ${relPath} to disk`);
             } catch (err: unknown) {
                 console.error(`Failed to sync file ${relPath} to disk:`, err);
             }

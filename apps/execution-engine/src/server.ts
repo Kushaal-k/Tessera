@@ -43,7 +43,13 @@ export function createServer(options: ServerOptions = {}): RunningServer {
         },
     });
 
-    const runner = options.runner ?? new TerminalRunner();
+    const runner =
+        options.runner ??
+        new TerminalRunner({
+            enableSyncBridge: true,
+            syncServerUrl:
+                process.env["SYNC_SERVER_URL"] ?? "http://localhost:4000",
+        });
     const gateway = new TerminalGateway({ runner });
 
     const terminalNamespace = io.of("/terminal") as unknown as TerminalNamespace;

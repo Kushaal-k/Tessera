@@ -52,7 +52,11 @@ export class TerminalRunner {
         this.defaultCols = options.defaultCols ?? 80;
         this.defaultRows = options.defaultRows ?? 24;
         this.syncServerUrl = options.syncServerUrl;
-        this.enableSyncBridge = options.enableSyncBridge ?? false;
+        this.enableSyncBridge =
+            options.enableSyncBridge ??
+            (process.env["ENABLE_SYNC_BRIDGE"] !== "false" &&
+                process.env["NODE_ENV"] !== "test" &&
+                process.env["VITEST"] === undefined);
     }
 
     public getSession(sessionId: string): TerminalSession | undefined {
