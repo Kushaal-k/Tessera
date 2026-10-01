@@ -5,6 +5,8 @@ import * as path from "node:path";
 import {
   FsWatcher,
   isCleanBoundaryIgnored,
+  computeContentHash,
+  isBinaryBuffer,
   type FsWatchEvent,
 } from "./fsWatcher.js";
 
@@ -52,28 +54,64 @@ describe("FsWatcher", () => {
   });
 
   describe("Echo-Loop Suppression", () => {
-    it("suppresses events for files marked as recent writes within TTL", () => {
-      watcher.markRecentWrite("src/App.tsx");
-      expect(watcher.shouldSuppress("src/App.tsx")).toBe(true);
-      expect(watcher.shouldSuppress("/src/App.tsx")).toBe(true);
-      expect(watcher.shouldSuppress("src/Other.tsx")).toBe(false);
+    it("suppresses events for files marked as recent writes with matching content", () => {
+      watcher.markRecentWrite("src/App.tsx", "const a = 1;");
+      expect(watcher.shouldSuppress("src/App.tsx", "const a = 1;")).toBe(true);
+      expect(watcher.shouldSuppress("/src/App.tsx", "const a = 1;")).toBe(false); // Token consumed on previous call!
+      expect(watcher.shouldSuppress("src/Other.tsx", "const a = 1;")).toBe(false);
+    });
+
+    it("consumes write tokens on first match (one-shot)", () => {
+      watcher.markRecentWrite("src/App.tsx", "initial content");
+      // First match consumes token
+      expect(watcher.shouldSuppress("src/App.tsx", "initial content")).toBe(true);
+      // Subsequent edit is NOT suppressed!
+      expect(watcher.shouldSuppress("src/App.tsx", "initial content")).toBe(false);
+    });
+
+    it("handles empty files correctly without dropping subsequent edits", () => {
+      watcher.markRecentWrite("empty.txt", "");
+      // Exact hash for empty string is matched and suppressed
+      expect(watcher.shouldSuppress("empty.txt", "")).toBe(true);
+      // Subsequent edit with non-empty content is NOT suppressed
+      expect(watcher.shouldSuppress("empty.txt", "new line")).toBe(false);
     });
 
     it("expires suppressed writes after TTL has elapsed", async () => {
-      watcher.markRecentWrite("src/App.tsx");
-      expect(watcher.shouldSuppress("src/App.tsx")).toBe(true);
+      watcher.markRecentWrite("src/App.tsx", "content");
 
       await new Promise((resolve) => {
         setTimeout(resolve, 250);
       });
 
-      expect(watcher.shouldSuppress("src/App.tsx")).toBe(false);
+      expect(watcher.shouldSuppress("src/App.tsx", "content")).toBe(false);
     });
 
-    it("suppresses matching hash but allows different hash writes", () => {
-      watcher.markRecentWrite("src/App.tsx", "hash-123");
-      expect(watcher.shouldSuppress("src/App.tsx", "hash-123")).toBe(true);
-      expect(watcher.shouldSuppress("src/App.tsx", "hash-456")).toBe(false);
+    it("suppresses matching content hash but allows different content writes", () => {
+      watcher.markRecentWrite("src/App.tsx", "version-1");
+      expect(watcher.shouldSuppress("src/App.tsx", "version-2")).toBe(false);
+      expect(watcher.shouldSuppress("src/App.tsx", "version-1")).toBe(true);
+    });
+  });
+
+  describe("Binary Detection & Hash Helpers", () => {
+    it("detects binary buffers with null bytes", () => {
+      const textBuf = Buffer.from("Hello world, this is utf-8 text!");
+      expect(isBinaryBuffer(textBuf)).toBe(false);
+
+      const binaryBuf = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x0d, 0x0a]);
+      expect(isBinaryBuffer(binaryBuf)).toBe(true);
+    });
+
+    it("computes deterministic content hashes", () => {
+      const hash1 = computeContentHash("sample content");
+      const hash2 = computeContentHash("sample content");
+      const hashEmpty = computeContentHash("");
+
+      expect(hash1).toBe(hash2);
+      expect(hash1.length).toBe(16);
+      expect(hashEmpty.length).toBe(16);
+      expect(hash1).not.toBe(hashEmpty);
     });
   });
 
