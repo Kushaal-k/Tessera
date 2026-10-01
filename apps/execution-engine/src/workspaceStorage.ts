@@ -166,8 +166,13 @@ export class WorkspaceStorage {
     }
 
     public async listFiles(workspaceId: string): Promise<string[]> {
+        return (await this.listEntries(workspaceId)).files;
+    }
+
+    public async listEntries(workspaceId: string): Promise<{ files: string[]; folders: string[] }> {
         const workspacePath = this.getWorkspacePath(workspaceId);
         const results: string[] = [];
+        const folders: string[] = [];
 
         const walk = async (currentDir: string): Promise<void> => {
             let entries: import("node:fs").Dirent[] = [];
@@ -198,6 +203,7 @@ export class WorkspaceStorage {
                 }
 
                 if (entry.isDirectory()) {
+                    folders.push(relPath);
                     await walk(fullPath);
                 } else if (entry.isFile()) {
                     results.push(relPath);
@@ -206,7 +212,14 @@ export class WorkspaceStorage {
         };
 
         await walk(workspacePath);
-        return results;
+        return { files: results, folders };
+    }
+
+    public async renamePath(workspaceId: string, oldPath: string, newPath: string): Promise<void> {
+        const source = this.resolveSafePath(workspaceId, oldPath);
+        const target = this.resolveSafePath(workspaceId, newPath);
+        await fs.mkdir(path.dirname(target), { recursive: true, mode: 0o777 });
+        await fs.rename(source, target);
     }
 
     public async readFile(workspaceId: string, relativePath: string): Promise<string> {

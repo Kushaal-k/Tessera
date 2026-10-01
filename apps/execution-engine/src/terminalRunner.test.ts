@@ -207,3 +207,34 @@ describe("TerminalRunner", () => {
     expect(stopSpy).toHaveBeenCalled();
   });
 });
+
+
+describe("workspace synchronization lifecycle", () => {
+  it("shares the watcher until the last terminal session closes", async () => {
+    const first = createMockDocker();
+    const second = createMockDocker();
+    const containers = [first.mockContainer, second.mockContainer];
+    const docker = {
+      createContainer: vi.fn(async () => containers.shift()),
+    } as unknown as Dockerode;
+    const runner = new TerminalRunner({ docker, enableSyncBridge: false });
+    const a = await runner.createSession(
+      { roomId: "shared-watcher-room", workspaceId: "shared-watcher-storage" },
+      { onData: vi.fn(), onExit: vi.fn() },
+    );
+    const b = await runner.createSession(
+      { roomId: "shared-watcher-room", workspaceId: "shared-watcher-storage" },
+      { onData: vi.fn(), onExit: vi.fn() },
+    );
+    try {
+      expect(a.watcher).toBe(b.watcher);
+      expect(runner.getSessionsForWorkspace("shared-watcher-storage")).toHaveLength(2);
+      await runner.killSession(a.sessionId);
+      expect(b.watcher?.isWatching()).toBe(true);
+      await runner.killSession(b.sessionId);
+      expect(b.watcher?.isWatching()).toBe(false);
+    } finally {
+      await runner.cleanupAll();
+    }
+  });
+});

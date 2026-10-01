@@ -10,6 +10,15 @@ import {
   type FsWatchEvent,
 } from "./fsWatcher.js";
 
+describe("filesystem echo operation matching", () => {
+  it("does not consume a deletion token for a new file write", () => {
+    const watcher = new FsWatcher("token-workspace", "/tmp/token-workspace");
+    watcher.markRecentWrite("index.js");
+    expect(watcher.shouldSuppress("index.js", "new content", "add")).toBe(false);
+    expect(watcher.shouldSuppress("index.js", undefined, "unlink")).toBe(true);
+  });
+});
+
 describe("FsWatcher", () => {
   let tempBaseDir: string;
   let watcher: FsWatcher;

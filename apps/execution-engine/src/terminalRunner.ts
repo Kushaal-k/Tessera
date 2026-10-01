@@ -14,6 +14,8 @@ export interface TerminalSessionCallbacks {
 export interface TerminalSession {
     readonly sessionId: string;
     readonly roomId: string;
+    readonly workspaceId: string;
+    readonly unsubscribeFsEvents?: () => void;
     readonly container: Dockerode.Container;
     readonly exec: Dockerode.Exec;
     readonly stream: NodeJS.ReadWriteStream;
@@ -41,6 +43,11 @@ export class TerminalRunner {
     private readonly syncServerUrl?: string;
     private readonly enableSyncBridge: boolean;
     private readonly sessions = new Map<string, TerminalSession>();
+    private readonly workspaceRuntimes = new Map<string, {
+        watcher: FsWatcher;
+        bridge?: WorkspaceSyncBridge;
+        sessionCount: number;
+    }>();
 
     constructor(options: TerminalRunnerOptions = {}) {
         this.docker = options.docker ?? 
@@ -120,32 +127,39 @@ export class TerminalRunner {
             //Ignore initial resize error if stream is still initializing
         }
 
-        const watcher = new FsWatcher(workspaceId, hostWorkspacePath);
-        if (callbacks.onFsEvent) {
-            watcher.onEvent(callbacks.onFsEvent);
+        let runtime = this.workspaceRuntimes.get(workspaceId);
+        if (!runtime) {
+            const watcher = new FsWatcher(workspaceId, hostWorkspacePath);
+            const bridge = this.enableSyncBridge
+                ? new WorkspaceSyncBridge({
+                    workspaceId,
+                    roomId: payload.roomId,
+                    hostWorkspacePath,
+                    storage: this.workspaceStorage,
+                    watcher,
+                    syncServerUrl: this.syncServerUrl,
+                })
+                : undefined;
+            runtime = { watcher, bridge, sessionCount: 0 };
+            this.workspaceRuntimes.set(workspaceId, runtime);
+            watcher.start();
         }
-        watcher.start();
-
-        let bridge: WorkspaceSyncBridge | undefined;
-        if (this.enableSyncBridge) {
-            bridge = new WorkspaceSyncBridge({
-                workspaceId,
-                hostWorkspacePath,
-                storage: this.workspaceStorage,
-                watcher,
-                syncServerUrl: this.syncServerUrl,
-            });
-        }
+        runtime.sessionCount += 1;
+        const unsubscribeFsEvents = callbacks.onFsEvent
+            ? runtime.watcher.onEvent(callbacks.onFsEvent)
+            : undefined;
 
         const session: TerminalSession = {
             sessionId,
             roomId: payload.roomId,
+            workspaceId,
+            unsubscribeFsEvents,
             container,
             exec,
             stream,
             callback: callbacks,
-            watcher,
-            bridge,
+            watcher: runtime.watcher,
+            bridge: runtime.bridge,
         };
 
         stream.on("data", (chunk: Buffer | string) => {
@@ -206,19 +220,22 @@ export class TerminalRunner {
 
         this.sessions.delete(sessionId);
 
-        if (session.watcher) {
-            try {
-                await session.watcher.stop();
-            } catch {
-                // Ignore watcher teardown error
-            }
-        }
-
-        if (session.bridge) {
-            try {
-                await session.bridge.destroy();
-            } catch {
-                // Ignore bridge teardown error
+        session.unsubscribeFsEvents?.();
+        const runtime = this.workspaceRuntimes.get(session.workspaceId);
+        if (runtime) {
+            runtime.sessionCount -= 1;
+            if (runtime.sessionCount === 0) {
+                this.workspaceRuntimes.delete(session.workspaceId);
+                try {
+                    await runtime.bridge?.destroy();
+                } catch {
+                    // Continue container cleanup if synchronization teardown fails.
+                }
+                try {
+                    await runtime.watcher.stop();
+                } catch {
+                    // Continue container cleanup if watcher teardown fails.
+                }
             }
         }
 
@@ -254,7 +271,7 @@ export class TerminalRunner {
     public getSessionsForWorkspace(workspaceId: string): readonly TerminalSession[] {
         const matching: TerminalSession[] = [];
         for (const session of this.sessions.values()) {
-            if (session.roomId === workspaceId) {
+            if (session.workspaceId === workspaceId) {
                 matching.push(session);
             }
         }

@@ -14,6 +14,7 @@ import type {
 } from "@tessera/shared-types";
 
 import { createWorkspace } from "@tessera/collaboration";
+import { registerDocumentSyncHandlers } from "./documentSync.js";
 
 interface RoomState {
   readonly doc: Y.Doc;
@@ -129,42 +130,12 @@ io.on("connection", (socket) => {
     socket.emit("sync-step-1", stateVector);
   });
 
-  socket.on("sync-step-1", (data) => {
-    if (!currentRoomId) return;
-    const room = rooms.get(currentRoomId);
-    if (!room) return;
-
-    try {
-      const update = Y.encodeStateAsUpdate(room.doc, new Uint8Array(data));
-      socket.emit("sync-step-2", update);
-    } catch (err: unknown) {
-      console.error(`sync-step-1 error [room=${currentRoomId}]:`, err);
+  registerDocumentSyncHandlers(socket, () => {
+    if (!currentRoomId) {
+      return null;
     }
-  });
-
-  socket.on("sync-step-2", (data) => {
-    if (!currentRoomId) return;
     const room = rooms.get(currentRoomId);
-    if (!room) return;
-
-    try {
-      Y.applyUpdate(room.doc, new Uint8Array(data), socket);
-    } catch (err: unknown) {
-      console.error(`sync-step-2 error [room=${currentRoomId}]:`, err);
-    }
-  });
-
-  socket.on("sync-update", (data) => {
-    if (!currentRoomId) return;
-    const room = rooms.get(currentRoomId);
-    if (!room) return;
-
-    try {
-      Y.applyUpdate(room.doc, new Uint8Array(data), socket);
-      socket.to(currentRoomId).emit("sync-update", data);
-    } catch (err: unknown) {
-      console.error(`sync-update error [room=${currentRoomId}]:`, err);
-    }
+    return room ? { roomId: currentRoomId, doc: room.doc } : null;
   });
 
   socket.on("awareness-update", (data) => {

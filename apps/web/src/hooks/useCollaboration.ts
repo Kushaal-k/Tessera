@@ -79,6 +79,7 @@ export function useCollaboration(config: SyncConnectionConfig): UseCollaboration
         participant: config.participant,
       });
 
+      providerRef.current?.destroy();
       const provider = new TesseraSocketProvider({
         socket,
         ydoc: collabDoc.ydoc,
