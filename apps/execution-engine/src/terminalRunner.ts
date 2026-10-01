@@ -215,4 +215,17 @@ export class TerminalRunner {
         }
     }
 
+    public getWorkspaceStorage(): WorkspaceStorage {
+        return this.workspaceStorage;
+    }
+
+    public getSessionsForWorkspace(workspaceId: string): readonly TerminalSession[] {
+        const matching: TerminalSession[] = [];
+        for (const session of this.sessions.values()) {
+            if (session.roomId === workspaceId) {
+                matching.push(session);
+            }
+        }
+        return matching;
+    }
 }

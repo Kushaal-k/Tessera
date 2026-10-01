@@ -105,5 +105,45 @@ describe("WorkspaceStorage", () => {
       await storage.deleteWorkspace(workspaceId);
       expect(await storage.isWorkspaceInitialized(workspaceId)).toBe(false);
     });
+
+    it("enforces strict path traversal prevention in resolveSafePath", async () => {
+      const workspaceId = "room-test-security";
+      await storage.initWorkspace(workspaceId);
+
+      expect(() => storage.resolveSafePath(workspaceId, "../../etc/passwd")).toThrow(
+        "Path traversal attempt detected"
+      );
+      expect(() => storage.resolveSafePath(workspaceId, "/var/log/test")).toThrow(
+        "Path traversal attempt detected"
+      );
+      expect(() => storage.resolveSafePath(workspaceId, "test\0file.txt")).toThrow(
+        "Path traversal attempt detected: null byte in path"
+      );
+      expect(() => storage.resolveSafePath(workspaceId, "")).toThrow(
+        "Invalid file path: path must be a non-empty string"
+      );
+    });
+
+    it("safely creates nested folders and deletes specific files within workspace", async () => {
+      const workspaceId = "room-test-safe-delete";
+      await storage.initWorkspace(workspaceId);
+
+      await storage.createFolder(workspaceId, "nested/subfolder");
+      await storage.writeFiles(workspaceId, [
+        { path: "nested/subfolder/target.txt", content: "delete me" },
+      ]);
+
+      const targetPath = storage.resolveSafePath(workspaceId, "nested/subfolder/target.txt");
+      expect(await fs.readFile(targetPath, "utf-8")).toBe("delete me");
+
+      await storage.deletePath(workspaceId, "nested/subfolder/target.txt");
+      await expect(fs.readFile(targetPath, "utf-8")).rejects.toThrow();
+
+      // Ensure deleting traversal or workspace root itself is blocked
+      await expect(storage.deletePath(workspaceId, "../escape")).rejects.toThrow(
+        "Path traversal attempt detected"
+      );
+    });
   });
 });
+

@@ -148,6 +148,7 @@ export interface FsWatchEvent {
   readonly type: FsWatchEventType;
   readonly path: string;
   readonly workspaceId: string;
+  readonly content?: string;
 }
 
 export interface WorkspaceMetadata {
