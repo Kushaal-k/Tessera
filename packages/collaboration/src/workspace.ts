@@ -58,6 +58,39 @@ export function detectLanguage(fileName: string): string {
   }
 }
 
+export function applyGranularTextDiff(ytext: Y.Text, newContent: string): void {
+  const oldContent = ytext.toString();
+  if (oldContent === newContent) {
+    return;
+  }
+
+  let start = 0;
+  const oldLen = oldContent.length;
+  const newLen = newContent.length;
+
+  while (start < oldLen && start < newLen && oldContent[start] === newContent[start]) {
+    start++;
+  }
+
+  let oldEnd = oldLen;
+  let newEnd = newLen;
+
+  while (oldEnd > start && newEnd > start && oldContent[oldEnd - 1] === newContent[newEnd - 1]) {
+    oldEnd--;
+    newEnd--;
+  }
+
+  const deleteCount = oldEnd - start;
+  if (deleteCount > 0) {
+    ytext.delete(start, deleteCount);
+  }
+
+  const insertText = newContent.slice(start, newEnd);
+  if (insertText.length > 0) {
+    ytext.insert(start, insertText);
+  }
+}
+
 export class Workspace {
   public readonly doc: Y.Doc;
   private readonly _metadata: Y.Map<unknown>;
@@ -190,10 +223,7 @@ export class Workspace {
 
     const now = new Date().toISOString();
     this.doc.transact(() => {
-      ytext.delete(0, ytext.length);
-      if (content.length > 0) {
-        ytext.insert(0, content);
-      }
+      applyGranularTextDiff(ytext, content);
       this._files.set(id, {
         ...file,
         size: content.length,
