@@ -44,6 +44,8 @@ describe("WorkspaceSyncBridge", () => {
             customSocket: createMockSocket(),
             debounceMs: 50,
         });
+
+        await bridge.reconciliationPromise;
     });
 
     afterEach(async () => {
@@ -212,6 +214,31 @@ describe("WorkspaceSyncBridge", () => {
 
             // writeFiles should not have been called because origin was FS_ORIGIN
             expect(writeSpy).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("Initial & Reconnect Reconciliation", () => {
+        it("populates disk when Y.Doc already contains files", async () => {
+            bridge.workspace.createFile("seed.json", {
+                initialContent: '{"seeded": true}',
+            });
+
+            await bridge.reconcileInitialState();
+
+            const diskPath = path.join(tempBaseDir, workspaceId, "seed.json");
+            const content = await fs.readFile(diskPath, "utf-8");
+            expect(content).toBe('{"seeded": true}');
+        });
+
+        it("imports pre-existing disk files into Y.Doc on initial start", async () => {
+            const diskPath = path.join(tempBaseDir, workspaceId, "existing.ts");
+            await fs.writeFile(diskPath, "export const x = 42;", "utf-8");
+
+            await bridge.reconcileInitialState();
+
+            const file = bridge.workspace.getFiles().find((f) => f.name === "existing.ts");
+            expect(file).toBeDefined();
+            expect(bridge.workspace.getFileContent(file!.id)).toBe("export const x = 42;");
         });
     });
 });
