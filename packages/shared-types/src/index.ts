@@ -79,6 +79,7 @@ export interface TerminalServerToClientEvents {
   readonly "terminal:output": (payload: TerminalOutputPayload) => void;
   readonly "terminal:exit": (payload: TerminalExitPayload) => void;
   readonly "terminal:error": (payload: { readonly sessionId?: string; readonly error: string }) => void;
+  readonly "terminal:fs-event": (payload: FsWatchEvent) => void;
 }
 
 export type TerminalServiceToClientEvents = TerminalServerToClientEvents;
@@ -139,6 +140,14 @@ export interface SandboxConfig {
   readonly memoryLimitMb: number;
   readonly cpuQuota: number;
   readonly networkDisabled: boolean;
+}
+
+export type FsWatchEventType = "add" | "change" | "unlink" | "addDir" | "unlinkDir";
+
+export interface FsWatchEvent {
+  readonly type: FsWatchEventType;
+  readonly path: string;
+  readonly workspaceId: string;
 }
 
 export interface WorkspaceMetadata {

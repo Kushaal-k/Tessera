@@ -1,13 +1,6 @@
 import * as path from "node:path";
 import * as chokidar from "chokidar";
-
-export type FsWatchEventType = "add" | "change" | "unlink" | "addDir" | "unlinkDir";
-
-export interface FsWatchEvent {
-    readonly type: FsWatchEventType;
-    readonly path: string;
-    readonly workspaceId: string;
-}
+import type { FsWatchEvent, FsWatchEventType } from "@tessera/shared-types";
 
 export type FsWatchListener = (event: FsWatchEvent) => void;
 
@@ -206,3 +199,5 @@ export class FsWatcher {
         }
     }
 }
+
+export type { FsWatchEvent, FsWatchEventType };

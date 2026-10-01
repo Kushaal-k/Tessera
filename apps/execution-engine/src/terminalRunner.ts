@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import Dockerode from "dockerode";
-import { WorkspaceStorage } from "./workspaceStorage";
+import { WorkspaceStorage } from "./workspaceStorage.js";
+import { FsWatcher, type FsWatchEvent } from "./fsWatcher.js";
 import type { TerminalCreatePayload } from "@tessera/shared-types";
 
 export interface TerminalSessionCallbacks {
     readonly onData: (data: string) => void;
     readonly onExit: (exitCode: number | null) => void;
+    readonly onFsEvent?: (event: FsWatchEvent) => void;
 }
 
 export interface TerminalSession {
@@ -15,6 +17,7 @@ export interface TerminalSession {
     readonly exec: Dockerode.Exec;
     readonly stream: NodeJS.ReadWriteStream;
     readonly callback: TerminalSessionCallbacks;
+    readonly watcher?: FsWatcher;
 }
 
 export interface TerminalRunnerOptions {
@@ -105,6 +108,12 @@ export class TerminalRunner {
             //Ignore initial resize error if stream is still initializing
         }
 
+        const watcher = new FsWatcher(workspaceId, hostWorkspacePath);
+        if (callbacks.onFsEvent) {
+            watcher.onEvent(callbacks.onFsEvent);
+        }
+        watcher.start();
+
         const session: TerminalSession = {
             sessionId,
             roomId: payload.roomId,
@@ -112,6 +121,7 @@ export class TerminalRunner {
             exec,
             stream,
             callback: callbacks,
+            watcher,
         };
 
         stream.on("data", (chunk: Buffer | string) => {
@@ -171,6 +181,14 @@ export class TerminalRunner {
         }
 
         this.sessions.delete(sessionId);
+
+        if (session.watcher) {
+            try {
+                await session.watcher.stop();
+            } catch {
+                // Ignore watcher teardown error
+            }
+        }
 
         try {
             session.stream.removeAllListeners();
