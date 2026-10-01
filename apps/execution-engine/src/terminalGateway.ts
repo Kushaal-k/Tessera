@@ -56,6 +56,9 @@ export class TerminalGateway {
                         });
                         this.untrackSession(socket.id, session.sessionId);
                     },
+                    onFsEvent: (event) => {
+                        socket.emit("terminal:fs-event", event);
+                    },
                 });
 
                 this.trackSession(socket.id, session.sessionId);

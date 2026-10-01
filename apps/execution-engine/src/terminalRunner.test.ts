@@ -187,4 +187,23 @@ describe("TerminalRunner", () => {
     expect(runner.getActiveSessionCount()).toBe(0);
     expect(mockContainer.remove).toHaveBeenCalledTimes(2);
   });
+
+  it("attaches FsWatcher to session and stops watcher on killSession", async () => {
+    const { mockDocker } = createMockDocker();
+    const runner = new TerminalRunner({ docker: mockDocker });
+    const onFsEvent = vi.fn();
+
+    const session = await runner.createSession(
+      { roomId: "room-watcher-test" },
+      { onData: vi.fn(), onExit: vi.fn(), onFsEvent }
+    );
+
+    expect(session.watcher).toBeDefined();
+    expect(session.watcher?.isWatching()).toBe(true);
+
+    const stopSpy = vi.spyOn(session.watcher!, "stop");
+    await runner.killSession(session.sessionId);
+
+    expect(stopSpy).toHaveBeenCalled();
+  });
 });

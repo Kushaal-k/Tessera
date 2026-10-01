@@ -97,6 +97,19 @@ describe("TerminalGateway", () => {
         data: "shell output",
       });
 
+      if ("onFsEvent" in callbacks && typeof (callbacks as any).onFsEvent === "function") {
+        (callbacks as any).onFsEvent({
+          type: "add",
+          path: "src/App.tsx",
+          workspaceId: "room-1",
+        });
+        expect(socket.emit).toHaveBeenCalledWith("terminal:fs-event", {
+          type: "add",
+          path: "src/App.tsx",
+          workspaceId: "room-1",
+        });
+      }
+
       callbacks.onExit(0);
       expect(socket.emit).toHaveBeenCalledWith("terminal:exit", {
         sessionId: "session-123",
