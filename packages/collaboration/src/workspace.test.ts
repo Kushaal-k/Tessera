@@ -6,6 +6,7 @@ import {
   WORKSPACE_KEYS,
   detectLanguage,
   buildWorkspaceTree,
+  applyGranularTextDiff,
 } from "./workspace.js";
 import type {
   WorkspaceFolder,
@@ -715,6 +716,64 @@ describe("Workspace Model", () => {
     it("destroys the underlying document without error", () => {
       const workspace = createWorkspace({ id: "ws-lifecycle", name: "Lifecycle WS" });
       expect(() => workspace.destroy()).not.toThrow();
+    });
+  });
+
+  describe("Granular Text Diffing", () => {
+    it("preserves common prefix and suffix without replacing entire buffer", () => {
+      const doc = new Y.Doc();
+      const ytext = doc.getText("buffer");
+      ytext.insert(0, "function hello() { return 'world'; }");
+
+      let deleteEvents = 0;
+      let insertEvents = 0;
+
+      ytext.observe((event) => {
+        for (const delta of event.delta) {
+          if (delta.delete) {
+            deleteEvents += delta.delete;
+          }
+          if (delta.insert) {
+            insertEvents += (delta.insert as string).length;
+          }
+        }
+      });
+
+      // Change 'world' to 'tessera'
+      applyGranularTextDiff(ytext, "function hello() { return 'tessera'; }");
+
+      expect(ytext.toString()).toBe("function hello() { return 'tessera'; }");
+      // Only 'world' was deleted (5 chars) and 'tessera' inserted (7 chars)
+      expect(deleteEvents).toBe(5);
+      expect(insertEvents).toBe(7);
+    });
+
+    it("handles appends with 0 deletions", () => {
+      const doc = new Y.Doc();
+      const ytext = doc.getText("buffer");
+      ytext.insert(0, "line 1\n");
+
+      let deleted = 0;
+      ytext.observe((event) => {
+        for (const delta of event.delta) {
+          if (delta.delete) {
+            deleted += delta.delete;
+          }
+        }
+      });
+
+      applyGranularTextDiff(ytext, "line 1\nline 2\n");
+      expect(ytext.toString()).toBe("line 1\nline 2\n");
+      expect(deleted).toBe(0);
+    });
+
+    it("handles prepends with 0 deletions", () => {
+      const doc = new Y.Doc();
+      const ytext = doc.getText("buffer");
+      ytext.insert(0, "world");
+
+      applyGranularTextDiff(ytext, "hello world");
+      expect(ytext.toString()).toBe("hello world");
     });
   });
 });

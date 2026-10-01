@@ -18,5 +18,6 @@ export {
   WORKSPACE_KEYS,
   detectLanguage,
   buildWorkspaceTree,
+  applyGranularTextDiff,
 } from "./workspace.js";
 
