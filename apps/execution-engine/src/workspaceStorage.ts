@@ -32,6 +32,50 @@ export class WorkspaceStorage {
         return path.resolve(this.baseDir, workspaceId);
     }
 
+    public resolveSafePath(workspaceId: string, relativePath: string): string {
+        this.validateWorkspaceId(workspaceId);
+
+        if (!relativePath || typeof relativePath !== "string") {
+            throw new Error("Invalid file path: path must be a non-empty string");
+        }
+
+        if (relativePath.includes("\0")) {
+            throw new Error("Path traversal attempt detected: null byte in path");
+        }
+
+        if (path.isAbsolute(relativePath)) {
+            throw new Error(`Path traversal attempt detected in file path: ${relativePath}`);
+        }
+
+        const normalizedRelativePath = path.normalize(relativePath);
+        if (normalizedRelativePath.startsWith("..") || path.isAbsolute(normalizedRelativePath)) {
+            throw new Error(`Path traversal attempt detected in file path: ${relativePath}`);
+        }
+
+        const workspacePath = this.getWorkspacePath(workspaceId);
+        const targetPath = path.resolve(workspacePath, normalizedRelativePath);
+
+        if (!targetPath.startsWith(workspacePath + path.sep)) {
+            throw new Error(`Path traversal attempt detected: ${relativePath} escapes workspace boundary`);
+        }
+
+        return targetPath;
+    }
+
+    public async checkSymlinkContainment(workspaceId: string, targetPath: string): Promise<boolean> {
+        const workspacePath = this.getWorkspacePath(workspaceId);
+        try {
+            const lstat = await fs.lstat(targetPath);
+            if (lstat.isSymbolicLink()) {
+                const realPath = await fs.realpath(targetPath);
+                return realPath.startsWith(workspacePath + path.sep);
+            }
+            return true;
+        } catch {
+            return true;
+        }
+    }
+
     public async initWorkspace(
         workspaceId: string,
         initialFiles?: readonly ExecutionFile[]
@@ -57,25 +101,8 @@ export class WorkspaceStorage {
         workspaceId: string,
         files: readonly ExecutionFile[]
     ): Promise<void> {
-        const workspacePath = this.getWorkspacePath(workspaceId);
-
         for (const file of files) {
-            if (path.isAbsolute(file.path)) {
-                throw new Error(`Path traversal attempt detected in file path: ${file.path}`);
-            }
-
-            const normalizedRelativePath = path.normalize(file.path);
-
-            if (normalizedRelativePath.startsWith("..") || path.isAbsolute(normalizedRelativePath)) {
-                throw new Error(`Path traversal attempt detected in file path: ${file.path}`);
-            }
-
-            const targetPath = path.resolve(workspacePath, normalizedRelativePath);
-
-            if (!targetPath.startsWith(workspacePath + path.sep) && targetPath !== workspacePath) {
-                throw new Error(`Path traversal attempt detected: ${file.path}`);
-            }
-
+            const targetPath = this.resolveSafePath(workspaceId, file.path);
             const parentDir = path.dirname(targetPath);
             await fs.mkdir(parentDir, { recursive: true, mode: 0o777 });
 
@@ -91,6 +118,28 @@ export class WorkspaceStorage {
                 await fs.chmod(targetPath, 0o666);
             }
         }
+    }
+
+    public async createFolder(workspaceId: string, relativePath: string): Promise<string> {
+        const targetPath = this.resolveSafePath(workspaceId, relativePath);
+        await fs.mkdir(targetPath, { recursive: true, mode: 0o777 });
+        try {
+            await fs.chown(targetPath, 1000, 1000);
+        } catch {
+            await fs.chmod(targetPath, 0o777);
+        }
+        return targetPath;
+    }
+
+    public async deletePath(workspaceId: string, relativePath: string): Promise<void> {
+        const targetPath = this.resolveSafePath(workspaceId, relativePath);
+        const workspacePath = this.getWorkspacePath(workspaceId);
+
+        if (targetPath === workspacePath) {
+            throw new Error("Cannot delete workspace root directory via deletePath");
+        }
+
+        await fs.rm(targetPath, { recursive: true, force: true });
     }
 
     public async deleteWorkspace(workspaceId: string): Promise<void> {
