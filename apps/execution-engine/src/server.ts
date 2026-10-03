@@ -9,6 +9,7 @@ export interface ServerOptions {
     readonly port?: number;
     readonly corsOrigin?: string;
     readonly runner?: TerminalRunner;
+    readonly previewBaseUrl?: string;
 }
 
 export interface RunningServer {
@@ -21,93 +22,86 @@ export interface RunningServer {
 }
 
 export function createServer(options: ServerOptions = {}): RunningServer {
-    const port = options.port ?? 
+    const port = options.port ??
         Number(process.env["TERMINAL_PORT"] ?? process.env["PORT"] ?? 4002);
-
     const corsOrigin = options.corsOrigin ??
-        process.env["CLIENT_ORIGIN"] ??
-        "http://localhost:3000";
+        process.env["CLIENT_ORIGIN"] ?? "http://localhost:3000";
+    const runner = options.runner ?? new TerminalRunner({
+        enableSyncBridge: true,
+        syncServerUrl: process.env["SYNC_SERVER_URL"] ?? "http://localhost:4000",
+    });
+    const previewProxy = new PreviewProxy(runner, options.previewBaseUrl);
+    const httpServer = http.createServer();
+    const io = new SocketIOServer(httpServer, {
+        cors: { origin: corsOrigin, methods: ["GET", "POST"], credentials: true },
+    });
 
-    const runner =
-        options.runner ??
-        new TerminalRunner({
-            enableSyncBridge: true,
-            syncServerUrl:
-                process.env["SYNC_SERVER_URL"] ?? "http://localhost:4000",
-        });
+    // Dispatch by preview origin before Socket.IO claims an application's /socket.io/ path.
+    const socketIoRequests = httpServer.listeners("request");
+    const socketIoUpgrades = httpServer.listeners("upgrade");
+    httpServer.removeAllListeners("request");
+    httpServer.removeAllListeners("upgrade");
 
-    const previewProxy = new PreviewProxy(runner);
-
-    const httpServer = http.createServer((req, res) => {
+    httpServer.on("request", (req: http.IncomingMessage, res: http.ServerResponse) => {
+        if (previewProxy.isPreviewRequest(req)) {
+            void previewProxy.handleHttpRequest(req, res);
+            return;
+        }
         if (req.url === "/health" && req.method === "GET") {
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ status: "ok", service: "execution-engine" }));
             return;
         }
-
-        if (req.url?.startsWith("/preview/")) {
-            void previewProxy.handleHttpRequest(req, res);
+        if (req.url?.startsWith("/socket.io/")) {
+            for (const handler of socketIoRequests) {
+                handler.call(httpServer, req, res);
+            }
             return;
         }
-
         res.writeHead(404);
         res.end();
     });
 
     httpServer.on("upgrade", (req, socket, head) => {
-        if (req.url?.startsWith("/preview/")) {
+        if (previewProxy.isPreviewRequest(req)) {
             void previewProxy.handleUpgrade(req, socket as net.Socket, head);
+            return;
         }
-    });
-
-    const io = new SocketIOServer(httpServer, {
-        cors: {
-            origin: corsOrigin,
-            methods: ["GET", "POST"],
-            credentials: true,
-        },
+        if (req.url?.startsWith("/socket.io/")) {
+            for (const handler of socketIoUpgrades) {
+                handler.call(httpServer, req, socket, head);
+            }
+            return;
+        }
+        socket.destroy();
     });
 
     const gateway = new TerminalGateway({ runner });
-
-    const terminalNamespace = io.of("/terminal") as unknown as TerminalNamespace;
-
-    gateway.attach(terminalNamespace);
+    gateway.attach(io.of("/terminal") as unknown as TerminalNamespace);
 
     const stop = async (): Promise<void> => {
         await runner.cleanupAll();
         await new Promise<void>((resolve) => {
             io.close(() => {
-                httpServer.close(() => {
-                    resolve();
-                });
+                httpServer.close(() => resolve());
             });
         });
     };
 
-    return {
-        httpServer,
-        io,
-        gateway,
-        previewProxy,
-        port,
-        stop,
-    };
+    return { httpServer, io, gateway, previewProxy, port, stop };
 }
 
 export async function startServer(options: ServerOptions = {}): Promise<RunningServer> {
     const server = createServer(options);
-
     await new Promise<void>((resolve, reject) => {
         server.httpServer.once("error", reject);
         server.httpServer.listen(server.port, () => {
             server.httpServer.removeListener("error", reject);
             console.log(
-                `[execution-engine] Terminal WebSocket Gateway running on port ${String(server.port)} (/terminal)`
+                `[execution-engine] Terminal WebSocket Gateway running on port ${String(server.port)} (/terminal)`,
             );
             resolve();
         });
     });
-
     return server;
 }

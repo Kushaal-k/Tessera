@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import net from "node:net";
 import Dockerode from "dockerode";
 import { WorkspaceStorage } from "./workspaceStorage.js";
 import { FsWatcher, type FsWatchEvent } from "./fsWatcher.js";
@@ -278,31 +279,46 @@ export class TerminalRunner {
         return matching;
     }
 
-    public async getWorkspaceContainerIp(workspaceId: string): Promise<string | null> {
-        for (const session of this.sessions.values()) {
-            if (session.workspaceId === workspaceId) {
-                try {
-                    const info = await session.container.inspect();
+    public getWorkspaceIds(): readonly string[] {
+        return [...new Set([...this.sessions.values()].map((session) => session.workspaceId))];
+    }
 
-                    const networks = info.NetworkSettings?.Networks;
-                    if (networks) {
-                        for (const net of Object.values(networks)) {
-                            if (net.IPAddress && net.IPAddress.length > 0) {
-                                return net.IPAddress;
-                            }
-                        }
-                    }
-                    
-                    // Fallback to top-level raw inspect field or localhost
-                    const topLevelIp = (info.NetworkSettings as { IPAddress?: string })?.IPAddress;
-                    return topLevelIp && topLevelIp.length > 0 ? topLevelIp : "127.0.0.1";
-                } catch (error) {
-                    console.error(`Failed to inspect container for workspace ${workspaceId}:`, error);
-                    return null;
-                }
-            }
+    public async getWorkspaceContainerIp(workspaceId: string, port?: number): Promise<string | null> {
+        if (port !== undefined && (!Number.isInteger(port) || port < 1 || port > 65535)) {
+            throw new Error("Invalid preview port");
         }
 
-        return null;
+        let firstIp: string | null = null;
+        for (const session of this.getSessionsForWorkspace(workspaceId)) {
+            try {
+                const info = await session.container.inspect();
+                const networks = Object.values(info.NetworkSettings?.Networks ?? {});
+                const containerIp = networks.find((network) => network.IPAddress)?.IPAddress ??
+                    (info.NetworkSettings as { IPAddress?: string })?.IPAddress;
+                if (!containerIp) {
+                    continue;
+                }
+                firstIp ??= containerIp;
+                if (port === undefined || await this.isPortListening(containerIp, port)) {
+                    return containerIp;
+                }
+            } catch {
+                // A terminal may disappear while another session still serves the workspace.
+            }
+        }
+        return firstIp;
+    }
+
+    private isPortListening(host: string, port: number): Promise<boolean> {
+        return new Promise((resolve) => {
+            const socket = net.connect(port, host);
+            const finish = (listening: boolean): void => {
+                socket.destroy();
+                resolve(listening);
+            };
+            socket.setTimeout(500, () => finish(false));
+            socket.once("connect", () => finish(true));
+            socket.once("error", () => finish(false));
+        });
     }
 }
