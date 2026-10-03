@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Terminal as TerminalIcon, Play, TerminalSquare } from "lucide-react";
+import { Terminal as TerminalIcon, Play, TerminalSquare, Globe } from "lucide-react";
 import type { ExecutionResult } from "@tessera/shared-types";
 import { Terminal } from "./Terminal.js";
+import { LivePreview } from "./LivePreview.js";
 
-export type BottomPanelTab = "terminal" | "output";
+export type BottomPanelTab = "terminal" | "output" | "preview";
 
 export interface BottomPanelProps {
   readonly isRunning: boolean;
@@ -65,6 +66,19 @@ export function BottomPanel({
             {isRunning && (
               <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
             )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSelectTab("preview")}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+              activeTab === "preview"
+                ? "bg-slate-800 text-slate-100 border border-slate-700/60"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
+            }`}
+          >
+            <Globe className="h-3.5 w-3.5 text-amber-400" />
+            Web Preview
           </button>
         </div>
 
@@ -141,6 +155,15 @@ export function BottomPanel({
               </span>
             )}
           </div>
+        </div>
+
+        {/* Web Preview Tab */}
+        <div
+          className={`h-full w-full ${
+            activeTab === "preview" ? "block" : "hidden"
+          }`}
+        >
+          <LivePreview workspaceId={roomId ?? "default-room"} serverUrl={serverUrl} />
         </div>
       </div>
     </div>

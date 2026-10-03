@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { PassThrough } from "node:stream";
+import fs from "node:fs/promises";
+import net from "node:net";
+import os from "node:os";
+import path from "node:path";
+import { WorkspaceStorage } from "./workspaceStorage.js";
 import type Dockerode from "dockerode";
 import { TerminalRunner } from "./terminalRunner.js";
 
@@ -12,6 +17,7 @@ function createMockDocker() {
   };
   const mockContainer = {
     start: vi.fn().mockResolvedValue(undefined),
+    inspect: vi.fn(),
     exec: vi.fn().mockResolvedValue(mockExec),
     remove: vi.fn().mockResolvedValue(undefined),
   };
@@ -235,6 +241,85 @@ describe("workspace synchronization lifecycle", () => {
       expect(b.watcher?.isWatching()).toBe(false);
     } finally {
       await runner.cleanupAll();
+    }
+  });
+});
+
+describe("workspace preview container selection", () => {
+  async function setup(ips: readonly (string | null)[]) {
+    const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), "tessera-preview-selection-"));
+    const mocks = ips.map((ip) => {
+      const mock = createMockDocker();
+      mock.mockContainer.inspect.mockResolvedValue({
+        NetworkSettings: { Networks: ip ? { bridge: { IPAddress: ip } } : {} },
+      });
+      return mock;
+    });
+    let index = 0;
+    const docker = {
+      createContainer: vi.fn(async () => mocks[index++]!.mockContainer),
+    } as unknown as Dockerode;
+    const runner = new TerminalRunner({
+      docker, enableSyncBridge: false,
+      workspaceStorage: new WorkspaceStorage({ baseDir }),
+    });
+    for (const _ip of ips) {
+      await runner.createSession({ roomId: "preview-room" }, { onData: vi.fn(), onExit: vi.fn() });
+    }
+    return {
+      runner, mocks,
+      dispose: async () => {
+        await runner.cleanupAll();
+        await fs.rm(baseDir, { recursive: true, force: true });
+      },
+    };
+  }
+
+  it("selects the listening container when a server starts in the second terminal", async () => {
+    const upstream = net.createServer();
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const port = (upstream.address() as net.AddressInfo).port;
+    const context = await setup(["127.0.0.2", "127.0.0.1"]);
+    try {
+      expect(context.runner.getWorkspaceIds()).toEqual(["preview-room"]);
+      expect(await context.runner.getWorkspaceContainerIp("preview-room", port)).toBe("127.0.0.1");
+    } finally {
+      await context.dispose();
+      await new Promise<void>((resolve) => upstream.close(() => resolve()));
+    }
+  });
+
+  it("continues past a vanished or unaddressable container", async () => {
+    const context = await setup(["127.0.0.2", null, "127.0.0.3"]);
+    context.mocks[0]!.mockContainer.inspect.mockRejectedValue(new Error("Container removed"));
+    try {
+      expect(await context.runner.getWorkspaceContainerIp("preview-room")).toBe("127.0.0.3");
+    } finally {
+      await context.dispose();
+    }
+  });
+
+  it("keeps a real container address for diagnostics when no server is listening", async () => {
+    const upstream = net.createServer();
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const port = (upstream.address() as net.AddressInfo).port;
+    await new Promise<void>((resolve) => upstream.close(() => resolve()));
+    const context = await setup(["127.0.0.1"]);
+    try {
+      expect(await context.runner.getWorkspaceContainerIp("preview-room", port)).toBe("127.0.0.1");
+      expect(await context.runner.getWorkspaceContainerIp("missing-room", port)).toBeNull();
+    } finally {
+      await context.dispose();
+    }
+  });
+
+  it("does not fall back to the execution engine localhost for containers without an IP", async () => {
+    const context = await setup([null]);
+    try {
+      expect(await context.runner.getWorkspaceContainerIp("preview-room")).toBeNull();
+      await expect(context.runner.getWorkspaceContainerIp("preview-room", 70000)).rejects.toThrow("Invalid preview port");
+    } finally {
+      await context.dispose();
     }
   });
 });

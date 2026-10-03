@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import http from "node:http";
 import net from "node:net";
 import type { TerminalRunner } from "./terminalRunner.js";
@@ -9,77 +10,81 @@ export interface PreviewRouteParams {
 }
 
 export class PreviewProxy {
-    private readonly runner: TerminalRunner;
-
-    constructor(runner: TerminalRunner) {
-        this.runner = runner;
-    }
+    constructor(
+        private readonly runner: TerminalRunner,
+        private readonly previewBaseUrl = process.env["PREVIEW_BASE_URL"],
+    ) {}
 
     public parsePreviewUrl(url?: string): PreviewRouteParams | null {
-        if (!url) {
+        const match = url?.match(/^\/preview\/([a-zA-Z0-9_-]+)\/(\d+)(?:([/?#].*))?$/);
+        if (!match?.[1] || !match[2]) {
             return null;
         }
 
-        // Regex breakdown:
-        // ^/preview/           -> starts with /preview/
-        // ([^/?#]+)            -> group 1: workspaceId (any chars except '/', '?', '#')
-        // /                    -> slash separator
-        // (\d+)                -> group 2: port (one or more digits)
-        // (?:[/?#](.*))?$      -> optional group 3: query, hash, or trailing subpath
-
-        const match = url.match(/^\/preview\/([^/?#]+)\/(\d+)(?:([/?#].*))?$/);
-        if (!match) {
+        const port = Number(match[2]);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) {
             return null;
         }
 
-        const workspaceId = match[1];
-        const portStr = match[2];
-        const subPath = match[3];
-
-        if (!workspaceId || !portStr) {
-            return null;
-        }
-
-        const port = Number.parseInt(portStr, 10);
-
-        if (Number.isNaN(port) || port < 1 || port > 65535) {
-            return null;
-        }
-
-        let targetPath = "/";
-        if (subPath) {
-            targetPath = subPath.startsWith("/") ? subPath : `/${subPath}`;
-        }
-
+        const subPath = match[3] ?? "/";
         return {
-            workspaceId,
+            workspaceId: match[1],
             port,
-            targetPath,
+            targetPath: subPath.startsWith("/") ? subPath : `/${subPath}`,
+        };
+    }
+
+    public isPreviewRequest(req: http.IncomingMessage): boolean {
+        return this.isPreviewHost(req) || Boolean(req.url?.startsWith("/preview/"));
+    }
+
+    public resolveRoute(req: http.IncomingMessage): PreviewRouteParams | null {
+        if (this.isPreviewHost(req)) {
+            const target = this.parsePreviewHost(req);
+            if (!target) {
+                return null;
+            }
+            for (const workspaceId of this.runner.getWorkspaceIds()) {
+                if (this.workspaceToken(workspaceId) === target.workspaceToken) {
+                    return { workspaceId, port: target.port, targetPath: req.url ?? "/" };
+                }
+            }
+            return null;
         }
-    };
+
+        return this.parsePreviewUrl(req.url);
+    }
 
     public async handleHttpRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
-        const route = this.parsePreviewUrl(req.url);
+        try {
+            const route = this.resolveRoute(req);
+            if (!route) {
+                if (this.parsePreviewHost(req)) {
+                    this.renderDiagnosticPage(res, 404, "Workspace Container Not Found",
+                        "No active container session exists for this workspace. Open a terminal session to start the container.");
+                } else {
+                    res.writeHead(400, { "content-type": "text/plain" });
+                    res.end("Invalid preview URL format. Expected /preview/:workspaceId/:port/*");
+                }
+                return;
+            }
 
-        if(!route) {
-            res.writeHead(400, { "content-type": "text/plain" });
-            res.end("Invalid preview URL format. Expected /preview/:workspaceId/:port/*");
-            return;
-        }
+            if (!this.isPreviewHost(req)) {
+                this.redirectToPreview(req, res, route);
+                return;
+            }
 
-        const containerIp = await this.runner.getWorkspaceContainerIp(route.workspaceId);
-        if(!containerIp) {
-            this.renderDiagnosticPage(
-                res,
-                404,
-                "Workspace Container Not Found",
-                "No active container session exists for this workspace. Open a terminal session to start the container."
-            );
-            return;
-        }
+            const containerIp = await this.runner.getWorkspaceContainerIp(route.workspaceId, route.port);
+            if (!containerIp) {
+                this.renderDiagnosticPage(res, 404, "Workspace Container Not Found",
+                    "No active container session exists for this workspace. Open a terminal session to start the container.");
+                return;
+            }
+            if (res.destroyed) {
+                return;
+            }
 
-        const proxyReq = http.request(
-            {
+            const proxyReq = http.request({
                 hostname: containerIp,
                 port: route.port,
                 path: route.targetPath,
@@ -88,78 +93,127 @@ export class PreviewProxy {
                     ...req.headers,
                     host: `${containerIp}:${String(route.port)}`,
                     "x-forwarded-host": req.headers.host ?? "",
-                    "x-forwarded-proto": "http",
-                    "x-forwarded-prefix": `/preview/${route.workspaceId}/${String(route.port)}`,
+                    "x-forwarded-proto": this.requestProtocol(req),
+                    "x-forwarded-prefix": "",
                 },
-            },
-            (proxeRes) => {
-                res.writeHead(proxeRes.statusCode ?? 200, proxeRes.headers);
-                proxeRes.pipe(res);
-            }
-        );
+            }, (proxyRes) => {
+                res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
+                proxyRes.on("error", () => res.destroy());
+                proxyRes.pipe(res);
+            });
 
-        proxyReq.on("error", (error: NodeJS.ErrnoException) => {
-            if (error.code === "ECONNREFUSED" || error.code === "ECONNRESET" || error.code === "ETIMEDOUT") {
+            proxyReq.on("error", (error: NodeJS.ErrnoException) => {
+                const notListening = ["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT"].includes(error.code ?? "");
                 this.renderDiagnosticPage(
-                    res,
-                    502,
-                    "Server Not Yet Listening",
-                    `Port ${String(route.port)} inside the container is not accepting connections yet. Start your development server (e.g. npm run dev) in the terminal.`
+                    res, 502,
+                    notListening ? "Server Not Yet Listening" : "Proxy Error",
+                    notListening
+                        ? `Port ${String(route.port)} inside the container is not accepting connections yet. Start your development server (e.g. npm run dev -- --host 0.0.0.0) in the terminal.`
+                        : `Failed to forward request: ${error.message}`,
                 );
-            } else {
-                this.renderDiagnosticPage(
-                    res,
-                    502,
-                    "Proxy Error",
-                    `Failed to forward request: ${error.message}`
-                );
-            }
-        });
-
-        req.pipe(proxyReq);
+            });
+            proxyReq.setTimeout(10_000, () => {
+                proxyReq.destroy(Object.assign(new Error("Preview server timed out"), { code: "ETIMEDOUT" }));
+            });
+            req.on("aborted", () => proxyReq.destroy());
+            res.on("close", () => {
+                if (!res.writableFinished) {
+                    proxyReq.destroy();
+                }
+            });
+            req.pipe(proxyReq);
+        } catch (error) {
+            this.renderDiagnosticPage(res, 502, "Proxy Error",
+                error instanceof Error ? error.message : "Failed to forward preview request.");
+        }
     }
 
-    public async handleUpgrade(
-        req: http.IncomingMessage,
-        clientSocket: net.Socket,
-        head: Buffer
-    ): Promise<void> {
-        const route = this.parsePreviewUrl(req.url);
-        if (!route) {
-            clientSocket.destroy();
-            return;
-        }
-
-        const containerIp = await this.runner.getWorkspaceContainerIp(route.workspaceId);
-        if (!containerIp) {
-            clientSocket.destroy();
-            return;
-        }
-
-        const targetSocket = net.connect(route.port, containerIp, () => {
-            targetSocket.write(
-                `${req.method ?? "GET"} ${route.targetPath} HTTP/${req.httpVersion}\r\n` +
-                Object.entries(req.headers)
-                    .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : (v ?? "")}\r\n`)
-                    .join("") +
-                "\r\n"
-            );
-
-            if (head.length > 0) {
-                targetSocket.write(head);
+    public async handleUpgrade(req: http.IncomingMessage, clientSocket: net.Socket, head: Buffer): Promise<void> {
+        try {
+            const route = this.resolveRoute(req);
+            if (!route) {
+                clientSocket.destroy();
+                return;
             }
 
-            targetSocket.pipe(clientSocket);
-            clientSocket.pipe(targetSocket);
-        });
+            const containerIp = await this.runner.getWorkspaceContainerIp(route.workspaceId, route.port);
+            if (!containerIp || clientSocket.destroyed) {
+                clientSocket.destroy();
+                return;
+            }
 
-        targetSocket.on("error", () => {
+            const targetSocket = net.connect(route.port, containerIp, () => {
+                targetSocket.setTimeout(0);
+                const headers = {
+                    ...req.headers,
+                    host: `${containerIp}:${String(route.port)}`,
+                    "x-forwarded-host": req.headers.host ?? "",
+                    "x-forwarded-proto": this.requestProtocol(req),
+                };
+                targetSocket.write(
+                    `${req.method ?? "GET"} ${route.targetPath} HTTP/${req.httpVersion}\r\n` +
+                    Object.entries(headers)
+                        .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : (value ?? "")}\r\n`)
+                        .join("") + "\r\n",
+                );
+                if (head.length > 0) {
+                    targetSocket.write(head);
+                }
+                targetSocket.pipe(clientSocket);
+                clientSocket.pipe(targetSocket);
+            });
+
+            targetSocket.setTimeout(3_000, () => targetSocket.destroy());
+            targetSocket.on("error", () => clientSocket.destroy());
+            targetSocket.on("close", () => clientSocket.destroy());
+            clientSocket.on("error", () => targetSocket.destroy());
+            clientSocket.on("close", () => targetSocket.destroy());
+        } catch {
             clientSocket.destroy();
-        });
+        }
+    }
 
-        clientSocket.on("error", () => {
-            targetSocket.destroy();
-        });
+    private hostname(req: http.IncomingMessage): string {
+        try {
+            return new URL(`http://${req.headers.host ?? ""}`).hostname;
+        } catch {
+            return "";
+        }
+    }
+
+    private isPreviewHost(req: http.IncomingMessage): boolean {
+        return /^[^.]+\.preview\./.test(this.hostname(req));
+    }
+
+    private parsePreviewHost(req: http.IncomingMessage): { workspaceToken: string; port: number } | null {
+        const match = this.hostname(req).match(/^p(\d+)-([a-f0-9]{32})\.preview\./);
+        const port = Number(match?.[1]);
+        if (!match?.[2] || !Number.isInteger(port) || port < 1 || port > 65535) {
+            return null;
+        }
+        return { workspaceToken: match[2], port };
+    }
+
+    private workspaceToken(workspaceId: string): string {
+        return createHash("sha256").update(workspaceId).digest("hex").slice(0, 32);
+    }
+
+    private requestProtocol(req: http.IncomingMessage): "http" | "https" {
+        return req.headers["x-forwarded-proto"] === "https" ||
+            (req.socket as net.Socket & { encrypted?: boolean })?.encrypted ? "https" : "http";
+    }
+
+    private redirectToPreview(req: http.IncomingMessage, res: http.ServerResponse, route: PreviewRouteParams): void {
+        const base = new URL(this.previewBaseUrl ?? `${this.requestProtocol(req)}://${req.headers.host ?? "localhost:4002"}`);
+        if (["127.0.0.1", "[::1]"].includes(base.hostname)) {
+            base.hostname = "localhost";
+        }
+        if (net.isIP(base.hostname) || base.hostname.startsWith("[")) {
+            throw new Error("Preview requires a DNS hostname. Configure PREVIEW_BASE_URL with your preview domain.");
+        }
+        base.hostname = `p${String(route.port)}-${this.workspaceToken(route.workspaceId)}.preview.${base.hostname}`;
+        res.writeHead(307, { Location: `${base.origin}${route.targetPath}`, "Cache-Control": "no-store" });
+        res.end();
     }
 
     private renderDiagnosticPage(
@@ -168,6 +222,18 @@ export class PreviewProxy {
         title: string,
         message: string,
     ): void {
+        if (res.destroyed || res.writableEnded) {
+            return;
+        }
+        if (res.headersSent) {
+            res.destroy();
+            return;
+        }
+        const escapeHtml = (value: string): string => value
+            .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+        title = escapeHtml(title);
+        message = escapeHtml(message);
         res.writeHead(statusCode, { "Content-Type": "text/html; charset=utf-8" });
         res.end(`<!DOCTYPE html>
                 <html lang="en">

@@ -7,6 +7,7 @@ import type {
   TerminalClientToServerEvents,
   TerminalServerToClientEvents,
 } from "@tessera/shared-types";
+import { getExecutionEngineUrl } from "../services/executionEngine.js";
 import { TESSERA_TERMINAL_THEME } from "../components/Terminal.js";
 
 export type TerminalStatus =
@@ -119,10 +120,7 @@ export function useTerminal({
     termRef.current = term;
     fitAddonRef.current = fitAddon;
 
-    const targetUrl =
-      serverUrl ??
-      (import.meta.env["VITE_EXECUTION_ENGINE_URL"] as string | undefined) ??
-      "http://localhost:4002";
+    const targetUrl = getExecutionEngineUrl(serverUrl);
 
     const socket: Socket<
       TerminalServerToClientEvents,
