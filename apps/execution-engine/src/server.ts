@@ -1,5 +1,7 @@
 import http from "node:http";
+import type net from "node:net";
 import { Server as SocketIOServer } from "socket.io";
+import { PreviewProxy } from "./previewProxy.js";
 import { TerminalGateway, type TerminalNamespace } from "./terminalGateway.js";
 import { TerminalRunner } from "./terminalRunner.js";
 
@@ -13,6 +15,7 @@ export interface RunningServer {
     readonly httpServer: http.Server;
     readonly io: SocketIOServer;
     readonly gateway: TerminalGateway;
+    readonly previewProxy: PreviewProxy;
     readonly port: number;
     readonly stop: () => Promise<void>;
 }
@@ -25,14 +28,36 @@ export function createServer(options: ServerOptions = {}): RunningServer {
         process.env["CLIENT_ORIGIN"] ??
         "http://localhost:3000";
 
+    const runner =
+        options.runner ??
+        new TerminalRunner({
+            enableSyncBridge: true,
+            syncServerUrl:
+                process.env["SYNC_SERVER_URL"] ?? "http://localhost:4000",
+        });
+
+    const previewProxy = new PreviewProxy(runner);
+
     const httpServer = http.createServer((req, res) => {
         if (req.url === "/health" && req.method === "GET") {
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ status: "ok", service: "execution-engine" }));
             return;
         }
+
+        if (req.url?.startsWith("/preview/")) {
+            void previewProxy.handleHttpRequest(req, res);
+            return;
+        }
+
         res.writeHead(404);
         res.end();
+    });
+
+    httpServer.on("upgrade", (req, socket, head) => {
+        if (req.url?.startsWith("/preview/")) {
+            void previewProxy.handleUpgrade(req, socket as net.Socket, head);
+        }
     });
 
     const io = new SocketIOServer(httpServer, {
@@ -43,13 +68,6 @@ export function createServer(options: ServerOptions = {}): RunningServer {
         },
     });
 
-    const runner =
-        options.runner ??
-        new TerminalRunner({
-            enableSyncBridge: true,
-            syncServerUrl:
-                process.env["SYNC_SERVER_URL"] ?? "http://localhost:4000",
-        });
     const gateway = new TerminalGateway({ runner });
 
     const terminalNamespace = io.of("/terminal") as unknown as TerminalNamespace;
@@ -71,6 +89,7 @@ export function createServer(options: ServerOptions = {}): RunningServer {
         httpServer,
         io,
         gateway,
+        previewProxy,
         port,
         stop,
     };
