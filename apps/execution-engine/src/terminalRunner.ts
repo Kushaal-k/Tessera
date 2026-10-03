@@ -277,4 +277,32 @@ export class TerminalRunner {
         }
         return matching;
     }
+
+    public async getWorkspaceContainerIp(workspaceId: string): Promise<string | null> {
+        for (const session of this.sessions.values()) {
+            if (session.workspaceId === workspaceId) {
+                try {
+                    const info = await session.container.inspect();
+
+                    const networks = info.NetworkSettings?.Networks;
+                    if (networks) {
+                        for (const net of Object.values(networks)) {
+                            if (net.IPAddress && net.IPAddress.length > 0) {
+                                return net.IPAddress;
+                            }
+                        }
+                    }
+                    
+                    // Fallback to top-level raw inspect field or localhost
+                    const topLevelIp = (info.NetworkSettings as { IPAddress?: string })?.IPAddress;
+                    return topLevelIp && topLevelIp.length > 0 ? topLevelIp : "127.0.0.1";
+                } catch (error) {
+                    console.error(`Failed to inspect container for workspace ${workspaceId}:`, error);
+                    return null;
+                }
+            }
+        }
+
+        return null;
+    }
 }
