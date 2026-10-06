@@ -65,6 +65,71 @@ Tessera.io/
 ```
 
 ---
+### 🔄 System Interaction Overview
+
+The following diagrams illustrate the two primary workflows within Tessera.io:
+
+- Real-time collaborative editing powered by Monaco Editor, Yjs, and Socket.IO.
+- Secure remote code execution powered by BullMQ and Docker sandboxes.
+
+---
+
+### 🤝 Real-Time Collaboration Flow
+
+```mermaid
+flowchart LR
+    A[Developer Types Code] --> B[Monaco Editor]
+    B --> C[Yjs CRDT Document]
+    C --> D[Socket.IO Client]
+    D <--> E[Sync Server]
+    E --> F[Yjs Shared State]
+    F --> G[Connected Client A]
+    F --> H[Connected Client B]
+    F --> I[Connected Client C]
+    G --> J[Real-Time Updates]
+    H --> J
+    I --> J
+```
+
+**Flow Explanation**
+
+1. A developer edits code inside the Monaco Editor.
+2. Changes are stored in a Yjs CRDT document.
+3. Updates are synchronized through Socket.IO.
+4. The Sync Server distributes CRDT updates.
+5. Connected clients receive changes in real time.
+6. Conflict-free synchronization is maintained across all participants.
+
+---
+
+### ⚙️ Secure Code Execution Flow
+
+```mermaid
+flowchart LR
+    A[Developer Clicks Run] --> B[React Frontend]
+    B --> C[Execution Request]
+    C --> D[BullMQ Queue]
+    D --> E[Execution Engine Worker]
+    E --> F[Docker Sandbox]
+    F --> G[Execute User Code]
+    G --> H[Program Output]
+    H --> E
+    E --> I[Execution Result]
+    I --> B
+    B --> J[Display Output to User]
+```
+
+**Flow Explanation**
+
+1. The developer submits code for execution.
+2. The frontend sends an execution request.
+3. BullMQ queues the job for processing.
+4. The Execution Engine picks up the job.
+5. Code runs inside an isolated Docker sandbox.
+6. Output is captured and returned safely.
+7. Results are displayed back to the user.
+
+> These workflows represent the core foundation of Tessera.io's collaborative development and secure execution architecture.
 
 ## 🛠️ Local Development Setup
 
