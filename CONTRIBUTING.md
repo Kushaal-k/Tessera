@@ -1,125 +1,57 @@
- # Contributing to Tessera.io
+# Contributing to Tessera
 
-First off, thank you for considering contributing to Tessera.io! It's people like you that make this tool such a great collaborative sandbox.
+## Issues
 
-## Reporting Issues
+Search the existing issues before opening a new one. For a bug, include reproduction steps, expected and actual behavior, and relevant environment details. For an enhancement, describe the problem and the intended behavior.
 
-Before opening a new issue, please search the existing issues to see if the problem or feature request has already been discussed.
+Issue assignments are managed manually on GitHub. Pick an open issue and check for related pull requests before starting.
 
-If you find a new bug or have a feature proposal, please open an issue using our interactive templates:
+## Local setup
 
-* **🐛 Bug Reports:** Choose this template to report crashes, unexpected behavior, or security issues. Please include reproduction steps, expected behavior, and system environment info.
-* **💡 Feature Requests:** Choose this template to suggest new features, integrations, or improvements to the collaborative developer sandbox.
+Follow the [README](README.md#local-setup) to install dependencies and start the core services. Prepare the Python environment described under [development checks](README.md#development-checks) before running the full quality gate.
 
----
-
-## How to Contribute
-
-### 1. Claim an Issue
-
-* Find an open issue you'd like to work on. We recommend checking out our good first issues.
-* Comment `/claim` directly on the issue. Our auto-claim bot will automatically verify that the issue is unassigned, assign it to you, and post a welcoming confirmation comment.
-
-### 2. Star & Fork the Repository
-
-* **Star the repo:** Show your support by starring the main Tessera.io repository.
-* **Fork it:** Click the "Fork" button at the top right of the repository page to create your own copy.
-
-**Clone your fork:**
+Create a branch for the change:
 
 ```bash
-git clone git@github.com:<your-username>/Tessera.io.git
-cd Tessera.io
+git switch -c codex/describe-your-change
 ```
 
-### 3. Branching
+If you do not have write access to the repository, fork it and push your branch to the fork.
 
-Create a new branch for your feature or bug fix:
+## Making changes
+
+Keep each change focused on the issue it addresses. Follow the existing implementation and keep the code understandable.
+
+- Put shared service contracts and workspace types in `packages/shared-types`.
+- Keep Yjs synchronization and awareness in `apps/sync-server`.
+- Keep Docker containers, terminals, and filesystem synchronization in `apps/execution-engine`.
+- Exclude dependency directories and build caches from editor documents.
+- Add regression coverage for changed hooks, services, and synchronization behavior.
+
+Run the quality gate from the repository root:
 
 ```bash
-git checkout -b feature/your-feature-name
+npx turbo run lint typecheck test build
 ```
 
-### 4. Making Changes
+Manually verify changes that affect the editor, terminal, or filesystem. Include screenshots or a short recording for visible UI changes when useful.
 
-Make your changes in the relevant workspace(s) as described in the `README.md`.
+## Pull requests
 
-Please ensure that:
+Use a clear commit message that describes the change, such as `fix: preserve terminal session ownership` or `docs: clarify local setup`.
 
-* Your code follows the project's TypeScript guidelines.
-* Code remains clean, readable, and maintainable.
-* Existing functionality is not broken.
-* New functionality is adequately tested.
+Open a pull request with:
 
-Test your changes locally by running:
+- The problem and resulting behavior.
+- Relevant issue references.
+- Validation performed and any remaining limitations.
 
-```bash
-npm run typecheck
-npm run build
-npm run dev
-```
+The quality gate and relevant sandbox checks run automatically. Pull requests receive file-based labels automatically.
 
-### 5. Committing Your Changes
+## Adding a language
 
-Commit your changes using clear and descriptive commit messages.
-
-Example:
-
-```bash
-git commit -m "feat: add collaborative workspace improvements"
-```
-
-We encourage contributors to follow conventional commit formats when possible:
-
-```text
-feat: add new feature
-fix: resolve authentication issue
-docs: update contributing guide
-refactor: improve code structure
-```
-
-### 6. Submit a Pull Request
-
-Once you've pushed your commits to your fork, head over to the main repository and open a Pull Request.
-
-Please ensure your Pull Request includes:
-
-* A clear description of the problem being solved.
-* A summary of the changes made.
-* Any relevant issue references.
-* Testing details, if applicable.
-
-#### UI Changes
-
-If your Pull Request includes UI-related changes, please include one of the following:
-
-* At least one screenshot showing the updated user interface, or
-* A short GIF/video demonstrating the change and relevant interactions.
-
-Providing visual evidence helps reviewers understand, verify, and test UI improvements more efficiently.
-
----
-
-## Adding a New Language
-
-To add support for a new language in Tessera.io, follow these steps:
-
-### 1. Shared Types
-Add the new language to `SupportedLanguage` in `packages/shared-types/`.
-
-### 2. Execution Sandbox
-Add a new Docker sandbox container for the language in `apps/execution-engine/`.
-
-### 3. Monaco Editor Mapping
-Map the language to its Monaco editor identifier in `apps/web/src/App.tsx`.
-
-### 4. IntelliSense (Optional)
-Add an IntelliSense completion provider in `apps/web/src/` following the existing provider patterns in the codebase.
-
----
-
-## Need Help?
-
-Look for issues tagged with `good first issue` if you're not sure where to start.
-
-We look forward to your contributions and thank you for helping improve Tessera.io!
+1. Define the runtime contract in `packages/shared-types`, keeping editor language identifiers separate from runtime support.
+2. Add the image, entrypoint, and execution command in `apps/execution-engine/src/sandbox.ts`.
+3. Update extension detection in `packages/collaboration/src/workspace.ts` and the relevant frontend runtime controls.
+4. Verify real container execution, compiler/runtime failures, and multi-file behavior.
+5. Add completion providers only when required by the change.
