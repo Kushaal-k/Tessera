@@ -1,119 +1,129 @@
 # Tessera
 
+**A collaborative coding workspace in your browser.**
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Tessera is an open-source collaborative development sandbox. It combines a browser-based Monaco editor, a shared file explorer, interactive terminals, and Docker-based code execution.
+Tessera brings a Monaco editor, shared files, and an interactive terminal into one workspace. Edit code together in real time, work with source files from the editor or terminal, and run code in Docker containers.
 
-The project uses React and Vite for the frontend, Yjs and Socket.IO for collaboration, and a Node.js execution engine for terminal sessions and queued execution jobs.
+[Local setup](#local-setup) · [Try it out](#try-it-out) · [How it works](#how-it-works) · [Development](#development-checks) · [Troubleshooting](#troubleshooting)
 
 ## Core features
 
-- **Collaborative editing:** synchronize document changes and participant awareness through Yjs and Socket.IO.
-- **Workspace files:** create, rename, move, and delete files and folders in a shared explorer.
-- **Multi-file editing:** switch between open tabs with a separate text buffer for each file.
-- **Interactive terminals:** use a container shell with terminal resizing, restart, clear, and copy controls.
-- **Filesystem synchronization:** exchange source-file and folder changes between the editor and terminal filesystem.
-- **Batch execution:** submit workspace files to a BullMQ worker and receive standard output, errors, exit status, and execution duration.
-- **Resizable layout:** adjust the explorer, editor, and terminal/output panels.
-
-Dependency directories such as `node_modules`, `.git`, and build caches are excluded from source synchronization.
-
-## How the services fit together
-
-| Workspace | Responsibility |
-| --- | --- |
-| `apps/web` | React, Vite, Monaco, file explorer, and terminal UI |
-| `apps/sync-server` | Collaboration rooms, Yjs synchronization, awareness, and execution queue submission |
-| `apps/execution-engine` | Docker containers, terminal connections, source filesystem synchronization, and execution workers |
-| `apps/ai-service` | Optional Python service containing RAG and MCP endpoints |
-| `packages/shared-types` | Shared service contracts and workspace types |
-| `packages/collaboration` | Yjs workspace model and collaboration provider |
-| `packages/ui-components` | Shared React components |
-
-The browser connects to the sync server for editing and to the execution engine for terminals. The sync server queues batch jobs in Redis; the execution worker runs them in separate containers and returns results. Filesystem work and Docker lifecycle management belong to the execution engine.
+- **Live collaboration:** shared editing, participant presence, and cursors powered by Yjs and Socket.IO.
+- **Files and folders:** create, rename, move, and delete items in a shared explorer, with separate editor buffers and tabs for each file.
+- **Interactive terminals:** run shell commands in a workspace container, with resize, restart, clear, and copy controls.
+- **Source synchronization:** changes to source files and folders flow between the editor and terminal filesystem. Dependency directories such as `node_modules`, `.git`, and build caches are excluded.
+- **Code execution:** submit workspace files for a batch run and view output, errors, exit status, and execution duration.
+- **Adjustable workspace:** resize panels and configure the editor's font size and minimap.
 
 ## Local setup
 
-Run the core stack on Linux or inside WSL 2. On Windows, keep the repository and development tools in WSL and enable Docker Desktop integration for that distribution.
+Use Linux or WSL 2. On Windows, keep the repository and development tools inside WSL and enable Docker Desktop integration for that distribution.
 
 ### Prerequisites
 
-- Node.js 20 or later and npm 10 or later, as declared in `package.json`.
-- Docker Engine or Docker Desktop with a running daemon accessible from the development shell.
+- Node.js **20+** and npm **10+**.
+- Docker Engine or Docker Desktop, running and accessible from your development shell.
 - Docker Compose for the local Redis service.
 
-The core editor, sync server, and execution engine do not require Python or MongoDB.
+The core workspace runs without Python or MongoDB.
 
-### Install and start
+### Start the core services
 
-Clone the repository and install the locked dependencies:
+Run these commands in your development shell:
 
 ```bash
 git clone https://github.com/Kushaal-k/Tessera.git
 cd Tessera
 npm ci
-```
 
-Start Redis and prepare the terminal image:
-
-```bash
 docker compose up -d redis
 docker pull node:20-slim
-```
 
-Start the three core applications from the repository root:
-
-```bash
 npx turbo run dev --filter=@tessera/web --filter=@tessera/sync-server --filter=@tessera/execution-engine
 ```
 
-Turborepo builds the shared TypeScript packages before starting their consumers. Keep this command running while using the application.
+Turborepo builds the shared packages and starts the three core applications. Keep the process running, then open **[localhost:3000](http://localhost:3000)**.
 
 | Service | Default address |
 | --- | --- |
-| Web application | http://localhost:3000 |
-| Sync server | http://localhost:4000 |
-| Execution engine and terminal namespace | http://localhost:4002 and `/terminal` |
+| Browser workspace | `http://localhost:3000` |
+| Collaboration server | `http://localhost:4000` |
+| Execution engine | `http://localhost:4002` (terminal namespace: `/terminal`) |
 | Redis | `127.0.0.1:6379` |
 
-Open http://localhost:3000. Create a file, edit it, and use the terminal to confirm the corresponding source exists in the workspace. Terminal file changes should also appear in the explorer.
+### Try it out
 
-Use Ctrl+C to stop the development processes. To stop the local Redis container:
+1. Use **New File** in the explorer to create `hello.js`.
+2. Add `console.log("Hello from Tessera");` in the editor.
+3. In Tessera's terminal, run `node hello.js`. You should see `Hello from Tessera`.
+4. Open the application in a second browser tab, select the same file, and edit it to see collaboration in action.
+5. In the terminal, run `touch notes.txt`. The new file should appear in the shared explorer.
+
+To try the **Run** action separately, create `main.py` containing `print("Hello from Tessera")`, select it, and click **Run**. Results appear in the output panel. The first run may take longer while Docker downloads the language image.
+
+### Stop the services
+
+Press `Ctrl+C` in the shell running the development processes. Stop Redis with:
 
 ```bash
 docker compose stop redis
 ```
 
-### Configuration
+## Running code
 
-The setup above uses the services' built-in defaults. `.env.example` lists configuration variables, but the Node.js services do not automatically load a root `.env` file.
+| | Terminal | Run action |
+| --- | --- | --- |
+| Use it for | Shell commands, installing packages, and running development processes | Executing the selected file with the workspace's source files |
+| Environment | Workspace container, using `node:20-slim` by default | Separate container selected by the batch runtime |
+| Results | Interactive terminal output | Collected output, errors, exit status, and duration |
 
-For custom server settings, provide environment variables to the service process. Turborepo uses strict environment filtering, so explicitly configure forwarding or launch the workspace scripts directly after building their shared dependencies. Vite reads frontend environment files from `apps/web`.
+The [batch runner](apps/execution-engine/src/sandbox.ts) defines runtimes for TypeScript, Python, C++, Java, Rust, and Go. Editor syntax highlighting covers additional file types; runtime support is separate.
 
-The execution engine expects the Docker socket at `/var/run/docker.sock` by default. If running the worker inside a container, workspace bind-mount paths must also exist on the Docker daemon host. See [Docker sandbox troubleshooting](docs/docker-sandbox-troubleshooting.md) for Docker access and WSL mount guidance.
+### Current limitations
 
-## Execution behavior
+- **Shared room:** the application currently connects to one default collaboration room.
+- **Saving:** collaboration documents are held in server memory. Synchronization does not guarantee durable saving across server restarts; files on disk have a separate lifecycle.
+- **JavaScript and TypeScript runs:** JavaScript has no separate batch runtime key, and the TypeScript runner uses Node 20 without a compilation step. Use the terminal for JavaScript, as in the walkthrough above; typed TypeScript needs an appropriate toolchain.
 
-Interactive terminals and the Run action serve different purposes:
+## How it works
 
-- **Terminal:** runs commands in a workspace container, including package installation and long-running development processes.
-- **Run:** sends a file set and entrypoint to an isolated batch job, with a time limit and collected output.
+The React and Vite frontend connects to the sync server for shared editing and to the execution engine for terminals. Yjs manages collaborative document state; Socket.IO carries updates and terminal events. The sync server submits batch jobs through Redis and BullMQ, and the execution engine runs them in Docker and returns results.
 
-Batch runner definitions currently exist for TypeScript, Python, C++, Java, Rust, and Go in `apps/execution-engine/src/sandbox.ts`. Editor highlighting also covers other file types; highlighting alone does not make a file executable.
+| Directory | Responsibility |
+| --- | --- |
+| [`apps/web`](apps/web) | Browser UI, Monaco editor, file explorer, and xterm.js terminal |
+| [`apps/sync-server`](apps/sync-server) | Collaboration rooms, document synchronization, participant awareness, and batch job submission |
+| [`apps/execution-engine`](apps/execution-engine) | Docker lifecycle, terminal sessions, filesystem synchronization, and batch execution |
+| [`packages/collaboration`](packages/collaboration) | Yjs workspace model and collaboration provider |
+| [`packages/shared-types`](packages/shared-types) | Shared types and service contracts |
+| [`packages/ui-components`](packages/ui-components) | Shared React components |
 
-TypeScript currently uses a Node 20 image without a TypeScript compilation step, and JavaScript is not a separate batch runtime key. Typed TypeScript and JavaScript Run behavior therefore have known gaps. Terminal execution follows the commands and dependencies available inside its container.
+Docker and filesystem operations belong to the execution engine. The sync server handles collaboration independently of container management.
 
-The current application uses a default collaboration room. Room documents are kept in memory, so editor synchronization does not provide durable saving across server restarts. Workspace files on disk have a separate lifecycle.
+## Configuration
+
+The quick start uses built-in local defaults. [`.env.example`](.env.example) lists service settings, but the Node.js services do **not** automatically load a root `.env` file.
+
+- **Server settings:** supply environment variables to the service process. Turborepo filters environment variables by default, so custom settings need explicit forwarding or direct workspace startup after building shared dependencies.
+- **Frontend settings:** Vite reads environment files from `apps/web`. The terminal endpoint supports `VITE_EXECUTION_ENGINE_URL`; the collaboration URL is currently defined in [`App.tsx`](apps/web/src/App.tsx).
+- **Docker access:** the default socket is `/var/run/docker.sock`. Workspace bind-mount paths must be accessible to the Docker daemon, including when the execution engine itself runs in a container.
 
 ## Development checks
 
-The repository's quality gate runs:
+The full repository quality gate is:
 
 ```bash
 npx turbo run lint typecheck test build
 ```
 
-This includes the optional Python workspace. To prepare it in Linux or WSL:
+It checks all workspaces, including the optional Python service. Prepare that environment before running the full gate:
+
+<details>
+<summary>Python setup for repository-wide checks</summary>
+
+Use Python 3.11 or later, then run from the repository root:
 
 ```bash
 python3 -m venv apps/ai-service/.venv
@@ -121,20 +131,17 @@ source apps/ai-service/.venv/bin/activate
 pip install -r apps/ai-service/requirements.txt -r apps/ai-service/requirements-dev.txt
 ```
 
-Python 3.11 or later is required for that service and its checks. MongoDB is needed when running the optional service:
+Keep the virtual environment active when running the quality gate. The optional service lives in [`apps/ai-service`](apps/ai-service); it is excluded from the core startup command above. `npm run dev` starts every application and also requires that service's runtime dependencies, including MongoDB.
 
-```bash
-docker compose up -d mongo
-npm run dev
-```
+</details>
 
-With the virtual environment active, `npm run dev` starts all applications, including the Python service on port 8000. The filtered core command above leaves it out.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development conventions and pull request guidance. Track bugs and active work in [GitHub Issues](https://github.com/Kushaal-k/Tessera/issues).
 
-## Working on Tessera
+## Troubleshooting
 
-Use [the issue tracker](https://github.com/Kushaal-k/Tessera/issues) to track work. See [CONTRIBUTING.md](CONTRIBUTING.md) for branch, validation, and pull request guidance.
-
-Pull requests run the quality gate, with additional sandbox verification for execution-engine changes. File-based PR labels and container publishing remain automated; issue assignments are managed manually.
+- **Terminal fails to start:** check that `docker info` succeeds from your development shell and that `node:20-slim` has been pulled.
+- **Batch runs fail or do not return results:** confirm Redis and the execution engine are running, then inspect their logs. A first run also needs access to download its Docker image.
+- **Docker permission or WSL mount errors:** follow the [Docker sandbox troubleshooting guide](docs/docker-sandbox-troubleshooting.md).
 
 ## License
 
