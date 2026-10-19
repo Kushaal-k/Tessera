@@ -163,7 +163,7 @@ export function BottomPanel({
             activeTab === "preview" ? "block" : "hidden"
           }`}
         >
-          <LivePreview workspaceId={roomId ?? "default-room"} serverUrl={serverUrl} />
+          <LivePreview workspaceId={roomId ?? "default-room"} serverUrl={serverUrl} active={activeTab === "preview"}/>
         </div>
       </div>
     </div>

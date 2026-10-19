@@ -219,3 +219,12 @@ export interface WorkspaceFolderNode extends WorkspaceFolder {
 }
 
 export type WorkspaceNode = WorkspaceFileNode | WorkspaceFolderNode;
+
+export type WorkspacePreviewState = "ready" | "not_listening" | "missing_runtime";
+
+export interface WorkspacePreviewStatus {
+  readonly workspaceId: string;
+  readonly port: number;
+  readonly status: WorkspacePreviewState;
+  readonly containerIp?: string | null;
+}

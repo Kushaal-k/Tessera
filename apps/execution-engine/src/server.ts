@@ -1,5 +1,5 @@
 import http from "node:http";
-import type net from "node:net";
+import net from "node:net";
 import { Server as SocketIOServer } from "socket.io";
 import { PreviewProxy } from "./previewProxy.js";
 import { TerminalGateway, type TerminalNamespace } from "./terminalGateway.js";
@@ -42,7 +42,58 @@ export function createServer(options: ServerOptions = {}): RunningServer {
     httpServer.removeAllListeners("request");
     httpServer.removeAllListeners("upgrade");
 
-    httpServer.on("request", (req: http.IncomingMessage, res: http.ServerResponse) => {
+    httpServer.on("request", async (req: http.IncomingMessage, res: http.ServerResponse) => {
+        const previewStatusMatch = req.method === "GET" && req.url?.match(/^\/preview\/([a-zA-Z0-9_-]+)\/(\d+)\/status$/);
+        if (previewStatusMatch) {
+        const workspaceId = previewStatusMatch[1];
+        const port = Number(previewStatusMatch[2]);
+
+        if (!workspaceId || !Number.isInteger(port) || port < 1 || port > 65535) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Invalid preview workspace or port" }));
+            return;
+        }
+
+        try {
+            const containerIp = await runner.getWorkspaceContainerIp(workspaceId);
+            if (!containerIp) {
+            res.writeHead(200, {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": corsOrigin,
+            });
+            res.end(JSON.stringify({
+                workspaceId,
+                port,
+                status: "missing_runtime",
+            }));
+            return;
+            }
+
+            const isListening = await checkPortListening(containerIp, port);
+            res.writeHead(200, {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": corsOrigin,
+            });
+            res.end(JSON.stringify({
+            workspaceId,
+            port,
+            status: isListening ? "ready" : "not_listening",
+            containerIp,
+            }));
+        } catch (error) {
+            res.writeHead(500, {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": corsOrigin,
+            });
+            res.end(JSON.stringify({
+            workspaceId,
+            port,
+            status: "missing_runtime",
+            error: error instanceof Error ? error.message : "Status probe failed",
+            }));
+        }
+        return;
+        }
         if (previewProxy.isPreviewRequest(req)) {
             void previewProxy.handleHttpRequest(req, res);
             return;
@@ -104,4 +155,24 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
         });
     });
     return server;
+}
+
+function checkPortListening(host: string, port: number, timeoutMs = 500): Promise<boolean> {
+    return new Promise((resolve) => {
+        const socket = net.connect(port, host);
+        const finish = (listening: boolean) => {
+            socket.destroy();
+            resolve(listening);
+        };
+
+        socket.setTimeout(timeoutMs, () => {
+            finish(false);
+        });
+        socket.once("connect", () => {
+            finish(true);
+        });
+        socket.once("error", () => {
+            finish(false);
+        });
+    });
 }
