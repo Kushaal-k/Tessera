@@ -298,6 +298,115 @@ describe("TerminalGateway", () => {
     expect(mockRunner.killSession).toHaveBeenCalledWith("session-2");
     expect(gateway.getSessionIdsForSocket("socket-1").size).toBe(0);
   });
+
+  describe("runtime boundary validation", () => {
+    it("rejects terminal:create when payload is not an object or roomId is missing", async () => {
+      const mockRunner = createMockRunner();
+      const gateway = new TerminalGateway({ runner: mockRunner });
+      const socket = new MockSocket("socket-1");
+      gateway.handleConnection(socket as unknown as TerminalSocket);
+
+      socket.simulateClientEvent("terminal:create", null);
+      expect(socket.emit).toHaveBeenCalledWith("terminal:error", {
+        sessionId: undefined,
+        error: "Invalid payload: must be a non-null object",
+      });
+
+      socket.simulateClientEvent("terminal:create", { sessionId: "s-1" });
+      expect(socket.emit).toHaveBeenCalledWith("terminal:error", {
+        sessionId: "s-1",
+        error: "Invalid payload: roomId must be a non-empty string",
+      });
+      expect(mockRunner.createSession).not.toHaveBeenCalled();
+    });
+
+    it("rejects terminal:create with invalid viewport dimensions", async () => {
+      const mockRunner = createMockRunner();
+      const gateway = new TerminalGateway({ runner: mockRunner });
+      const socket = new MockSocket("socket-1");
+      gateway.handleConnection(socket as unknown as TerminalSocket);
+
+      socket.simulateClientEvent("terminal:create", {
+        roomId: "room-1",
+        cols: -10,
+      });
+      expect(socket.emit).toHaveBeenCalledWith("terminal:error", {
+        sessionId: undefined,
+        error: "Invalid payload: cols must be an integer between 1 and 1000",
+      });
+
+      socket.simulateClientEvent("terminal:create", {
+        roomId: "room-1",
+        rows: 9999,
+      });
+      expect(socket.emit).toHaveBeenCalledWith("terminal:error", {
+        sessionId: undefined,
+        error: "Invalid payload: rows must be an integer between 1 and 500",
+      });
+      expect(mockRunner.createSession).not.toHaveBeenCalled();
+    });
+
+    it("rejects terminal:data with missing sessionId or oversized payload", async () => {
+      const mockRunner = createMockRunner();
+      const gateway = new TerminalGateway({ runner: mockRunner });
+      const socket = new MockSocket("socket-1");
+      gateway.handleConnection(socket as unknown as TerminalSocket);
+
+      socket.simulateClientEvent("terminal:data", { sessionId: "", data: "ls" });
+      expect(socket.emit).toHaveBeenCalledWith("terminal:error", {
+        sessionId: undefined,
+        error: "Invalid payload: sessionId must be a non-empty string",
+      });
+
+      socket.simulateClientEvent("terminal:data", { sessionId: "s-1", data: 123 });
+      expect(socket.emit).toHaveBeenCalledWith("terminal:error", {
+        sessionId: "s-1",
+        error: "Invalid payload: data must be a string",
+      });
+
+      const oversized = "x".repeat(512 * 1024 + 1);
+      socket.simulateClientEvent("terminal:data", { sessionId: "s-1", data: oversized });
+      expect(socket.emit).toHaveBeenCalledWith("terminal:error", {
+        sessionId: "s-1",
+        error: "Terminal data payload exceeds maximum allowed size",
+      });
+      expect(mockRunner.write).not.toHaveBeenCalled();
+    });
+
+    it("rejects terminal:resize with out-of-bounds or non-integer dimensions", async () => {
+      const mockRunner = createMockRunner();
+      const gateway = new TerminalGateway({ runner: mockRunner });
+      const socket = new MockSocket("socket-1");
+      gateway.handleConnection(socket as unknown as TerminalSocket);
+
+      socket.simulateClientEvent("terminal:resize", { sessionId: "s-1", cols: 80.5, rows: 24 });
+      expect(socket.emit).toHaveBeenCalledWith("terminal:error", {
+        sessionId: "s-1",
+        error: "Invalid payload: cols must be an integer between 1 and 1000",
+      });
+
+      socket.simulateClientEvent("terminal:resize", { sessionId: "s-1", cols: 80, rows: 0 });
+      expect(socket.emit).toHaveBeenCalledWith("terminal:error", {
+        sessionId: "s-1",
+        error: "Invalid payload: rows must be an integer between 1 and 500",
+      });
+      expect(mockRunner.resize).not.toHaveBeenCalled();
+    });
+
+    it("rejects terminal:kill with missing or invalid sessionId", async () => {
+      const mockRunner = createMockRunner();
+      const gateway = new TerminalGateway({ runner: mockRunner });
+      const socket = new MockSocket("socket-1");
+      gateway.handleConnection(socket as unknown as TerminalSocket);
+
+      socket.simulateClientEvent("terminal:kill", { sessionId: "   " });
+      expect(socket.emit).toHaveBeenCalledWith("terminal:error", {
+        sessionId: undefined,
+        error: "Invalid payload: sessionId must be a non-empty string",
+      });
+      expect(mockRunner.killSession).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe("Execution Engine Server", () => {

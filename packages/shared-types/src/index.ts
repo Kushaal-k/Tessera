@@ -125,6 +125,11 @@ export interface SyncServerToClientEvents {
     readonly participants: readonly Participant[];
   }) => void;
   readonly "execution-result": (result: ExecutionResult) => void;
+  // Recoverable sync error emitted when payloads are malformed or invalid
+  readonly "sync-error"?: (error: { 
+    readonly message: string;
+    readonly code?: string;
+  }) => void;
 }
 
 export interface SyncConnectionConfig {
