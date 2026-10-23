@@ -79,7 +79,7 @@ export class TerminalRunner {
         payload: TerminalCreatePayload,
         callbacks: TerminalSessionCallbacks,
     ): Promise<TerminalSession> {
-        const sessionId = payload.sessionId ?? randomUUID();
+        const sessionId = randomUUID();
         const cols = payload.cols ?? this.defaultCols;
         const rows = payload.rows ?? this.defaultRows;
         const workspaceId = payload.workspaceId ?? payload.roomId;
