@@ -60,7 +60,6 @@ describe("TerminalGateway", () => {
     gateway.handleConnection(socket as unknown as TerminalSocket);
 
     socket.simulateClientEvent("terminal:create", {
-      sessionId: "session-123",
       roomId: "room-1",
       cols: 80,
       rows: 24,
@@ -72,7 +71,6 @@ describe("TerminalGateway", () => {
 
     expect(mockRunner.createSession).toHaveBeenCalledWith(
       expect.objectContaining({
-        sessionId: "session-123",
         roomId: "room-1",
         cols: 80,
         rows: 24,
@@ -132,7 +130,6 @@ describe("TerminalGateway", () => {
     gateway.handleConnection(socket as unknown as TerminalSocket);
 
     socket.simulateClientEvent("terminal:create", {
-      sessionId: "failed-session",
       roomId: "room-1",
     });
 
@@ -141,7 +138,6 @@ describe("TerminalGateway", () => {
     });
 
     expect(socket.emit).toHaveBeenCalledWith("terminal:error", {
-      sessionId: "failed-session",
       error: "Docker daemon failure",
     });
   });
@@ -151,7 +147,22 @@ describe("TerminalGateway", () => {
     const gateway = new TerminalGateway({ runner: mockRunner });
     const socket = new MockSocket("socket-1");
 
+    vi.mocked(mockRunner.createSession).mockResolvedValue({
+      sessionId: "session-123",
+      roomId: "room-1",
+      workspaceId: "room-1",
+      container: {} as any,
+      exec: {} as any,
+      stream: {} as any,
+      callback: { onData: vi.fn(), onExit: vi.fn() },
+    });
+
     gateway.handleConnection(socket as unknown as TerminalSocket);
+
+    socket.simulateClientEvent("terminal:create", { roomId: "room-1" });
+    await new Promise((resolve) => {
+      setTimeout(resolve, 10);
+    });
 
     socket.simulateClientEvent("terminal:data", {
       sessionId: "session-123",
@@ -180,7 +191,22 @@ describe("TerminalGateway", () => {
     const gateway = new TerminalGateway({ runner: mockRunner });
     const socket = new MockSocket("socket-1");
 
+    vi.mocked(mockRunner.createSession).mockResolvedValue({
+      sessionId: "session-123",
+      roomId: "room-1",
+      workspaceId: "room-1",
+      container: {} as any,
+      exec: {} as any,
+      stream: {} as any,
+      callback: { onData: vi.fn(), onExit: vi.fn() },
+    });
+
     gateway.handleConnection(socket as unknown as TerminalSocket);
+
+    socket.simulateClientEvent("terminal:create", { roomId: "room-1" });
+    await new Promise((resolve) => {
+      setTimeout(resolve, 10);
+    });
 
     socket.simulateClientEvent("terminal:resize", {
       sessionId: "session-123",
@@ -232,7 +258,6 @@ describe("TerminalGateway", () => {
     gateway.handleConnection(socket as unknown as TerminalSocket);
 
     socket.simulateClientEvent("terminal:create", {
-      sessionId: "session-123",
       roomId: "room-1",
     });
 
@@ -279,8 +304,8 @@ describe("TerminalGateway", () => {
 
     gateway.handleConnection(socket as unknown as TerminalSocket);
 
-    socket.simulateClientEvent("terminal:create", { sessionId: "session-1", roomId: "room-1" });
-    socket.simulateClientEvent("terminal:create", { sessionId: "session-2", roomId: "room-1" });
+    socket.simulateClientEvent("terminal:create", { roomId: "room-1" });
+    socket.simulateClientEvent("terminal:create", { roomId: "room-1" });
 
     await new Promise((resolve) => {
       setTimeout(resolve, 10);
@@ -308,13 +333,11 @@ describe("TerminalGateway", () => {
 
       socket.simulateClientEvent("terminal:create", null);
       expect(socket.emit).toHaveBeenCalledWith("terminal:error", {
-        sessionId: undefined,
         error: "Invalid payload: must be a non-null object",
       });
 
-      socket.simulateClientEvent("terminal:create", { sessionId: "s-1" });
+      socket.simulateClientEvent("terminal:create", { cols: 80 });
       expect(socket.emit).toHaveBeenCalledWith("terminal:error", {
-        sessionId: "s-1",
         error: "Invalid payload: roomId must be a non-empty string",
       });
       expect(mockRunner.createSession).not.toHaveBeenCalled();
@@ -331,7 +354,6 @@ describe("TerminalGateway", () => {
         cols: -10,
       });
       expect(socket.emit).toHaveBeenCalledWith("terminal:error", {
-        sessionId: undefined,
         error: "Invalid payload: cols must be an integer between 1 and 1000",
       });
 
@@ -340,7 +362,6 @@ describe("TerminalGateway", () => {
         rows: 9999,
       });
       expect(socket.emit).toHaveBeenCalledWith("terminal:error", {
-        sessionId: undefined,
         error: "Invalid payload: rows must be an integer between 1 and 500",
       });
       expect(mockRunner.createSession).not.toHaveBeenCalled();
@@ -405,6 +426,301 @@ describe("TerminalGateway", () => {
         error: "Invalid payload: sessionId must be a non-empty string",
       });
       expect(mockRunner.killSession).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("session ownership and lifecycle isolation", () => {
+    it("prevents cross-workspace session operations when client knows foreign session ID", async () => {
+      const mockRunner = createMockRunner();
+      const gateway = new TerminalGateway({ runner: mockRunner });
+      const socketA = new MockSocket("socket-a");
+      const socketB = new MockSocket("socket-b");
+
+      vi.mocked(mockRunner.createSession)
+        .mockResolvedValueOnce({
+          sessionId: "session-alpha",
+          roomId: "room-alpha",
+          workspaceId: "room-alpha",
+          container: {} as any,
+          exec: {} as any,
+          stream: {} as any,
+          callback: { onData: vi.fn(), onExit: vi.fn() },
+        })
+        .mockResolvedValueOnce({
+          sessionId: "session-beta",
+          roomId: "room-beta",
+          workspaceId: "room-beta",
+          container: {} as any,
+          exec: {} as any,
+          stream: {} as any,
+          callback: { onData: vi.fn(), onExit: vi.fn() },
+        });
+
+      gateway.handleConnection(socketA as unknown as TerminalSocket);
+      gateway.handleConnection(socketB as unknown as TerminalSocket);
+
+      socketA.simulateClientEvent("terminal:create", { roomId: "room-alpha" });
+      socketB.simulateClientEvent("terminal:create", { roomId: "room-beta" });
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
+
+      expect(gateway.getSessionIdsForSocket("socket-a")).toContain("session-alpha");
+      expect(gateway.getSessionIdsForSocket("socket-b")).toContain("session-beta");
+
+      // Socket B tries to write to Socket A's session in room-alpha
+      socketB.simulateClientEvent("terminal:data", {
+        sessionId: "session-alpha",
+        data: "echo foreign write\n",
+      });
+      expect(mockRunner.write).not.toHaveBeenCalledWith("session-alpha", expect.anything());
+      expect(socketB.emit).toHaveBeenCalledWith("terminal:error", {
+        sessionId: "session-alpha",
+        error: "Terminal session not found or unauthorized",
+      });
+
+      // Socket B tries to resize Socket A's session
+      socketB.simulateClientEvent("terminal:resize", {
+        sessionId: "session-alpha",
+        cols: 120,
+        rows: 40,
+      });
+      expect(mockRunner.resize).not.toHaveBeenCalledWith("session-alpha", expect.anything(), expect.anything());
+      expect(socketB.emit).toHaveBeenCalledWith("terminal:error", {
+        sessionId: "session-alpha",
+        error: "Terminal session not found or unauthorized",
+      });
+
+      // Socket B tries to kill Socket A's session
+      socketB.simulateClientEvent("terminal:kill", {
+        sessionId: "session-alpha",
+      });
+      expect(mockRunner.killSession).not.toHaveBeenCalledWith("session-alpha");
+      expect(socketB.emit).toHaveBeenCalledWith("terminal:error", {
+        sessionId: "session-alpha",
+        error: "Terminal session not found or unauthorized",
+      });
+
+      // Socket A operates its own session without errors
+      socketA.simulateClientEvent("terminal:data", {
+        sessionId: "session-alpha",
+        data: "echo legitimate\n",
+      });
+      expect(mockRunner.write).toHaveBeenCalledWith("session-alpha", "echo legitimate\n");
+    });
+
+    it("prevents same-workspace session operations between distinct clients", async () => {
+      const mockRunner = createMockRunner();
+      const gateway = new TerminalGateway({ runner: mockRunner });
+      const socketA = new MockSocket("socket-a");
+      const socketB = new MockSocket("socket-b");
+
+      vi.mocked(mockRunner.createSession)
+        .mockResolvedValueOnce({
+          sessionId: "session-collab-a",
+          roomId: "room-collab",
+          workspaceId: "room-collab",
+          container: {} as any,
+          exec: {} as any,
+          stream: {} as any,
+          callback: { onData: vi.fn(), onExit: vi.fn() },
+        })
+        .mockResolvedValueOnce({
+          sessionId: "session-collab-b",
+          roomId: "room-collab",
+          workspaceId: "room-collab",
+          container: {} as any,
+          exec: {} as any,
+          stream: {} as any,
+          callback: { onData: vi.fn(), onExit: vi.fn() },
+        });
+
+      gateway.handleConnection(socketA as unknown as TerminalSocket);
+      gateway.handleConnection(socketB as unknown as TerminalSocket);
+
+      socketA.simulateClientEvent("terminal:create", { roomId: "room-collab" });
+      socketB.simulateClientEvent("terminal:create", { roomId: "room-collab" });
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
+
+      socketB.simulateClientEvent("terminal:data", {
+        sessionId: "session-collab-a",
+        data: "rm -rf /\n",
+      });
+      expect(mockRunner.write).not.toHaveBeenCalledWith("session-collab-a", expect.anything());
+      expect(socketB.emit).toHaveBeenCalledWith("terminal:error", {
+        sessionId: "session-collab-a",
+        error: "Terminal session not found or unauthorized",
+      });
+
+      socketB.simulateClientEvent("terminal:resize", {
+        sessionId: "session-collab-a",
+        cols: 60,
+        rows: 20,
+      });
+      expect(mockRunner.resize).not.toHaveBeenCalledWith("session-collab-a", expect.anything(), expect.anything());
+      expect(socketB.emit).toHaveBeenCalledWith("terminal:error", {
+        sessionId: "session-collab-a",
+        error: "Terminal session not found or unauthorized",
+      });
+
+      socketB.simulateClientEvent("terminal:kill", {
+        sessionId: "session-collab-a",
+      });
+      expect(mockRunner.killSession).not.toHaveBeenCalledWith("session-collab-a");
+      expect(socketB.emit).toHaveBeenCalledWith("terminal:error", {
+        sessionId: "session-collab-a",
+        error: "Terminal session not found or unauthorized",
+      });
+    });
+
+    it("rejects repeated terminal:kill for an already untracked session", async () => {
+      const mockRunner = createMockRunner();
+      const gateway = new TerminalGateway({ runner: mockRunner });
+      const socket = new MockSocket("socket-1");
+
+      vi.mocked(mockRunner.createSession).mockResolvedValue({
+        sessionId: "session-kill-once",
+        roomId: "room-1",
+        workspaceId: "room-1",
+        container: {} as any,
+        exec: {} as any,
+        stream: {} as any,
+        callback: { onData: vi.fn(), onExit: vi.fn() },
+      });
+
+      gateway.handleConnection(socket as unknown as TerminalSocket);
+
+      socket.simulateClientEvent("terminal:create", { roomId: "room-1" });
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
+
+      socket.simulateClientEvent("terminal:kill", { sessionId: "session-kill-once" });
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
+
+      expect(mockRunner.killSession).toHaveBeenCalledTimes(1);
+      expect(mockRunner.killSession).toHaveBeenCalledWith("session-kill-once");
+      expect(gateway.getSessionIdsForSocket("socket-1")).not.toContain("session-kill-once");
+
+      // Repeated kill by the same socket
+      socket.simulateClientEvent("terminal:kill", { sessionId: "session-kill-once" });
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
+
+      expect(mockRunner.killSession).toHaveBeenCalledTimes(1);
+      expect(socket.emit).toHaveBeenCalledWith("terminal:error", {
+        sessionId: "session-kill-once",
+        error: "Terminal session not found or unauthorized",
+      });
+    });
+
+    it("ignores client-supplied session ID in create payload to prevent ID replacement and hijacking", async () => {
+      const mockRunner = createMockRunner();
+      const gateway = new TerminalGateway({ runner: mockRunner });
+      const socketA = new MockSocket("socket-a");
+      const socketB = new MockSocket("socket-b");
+
+      vi.mocked(mockRunner.createSession)
+        .mockResolvedValueOnce({
+          sessionId: "legit-server-id-1",
+          roomId: "room-1",
+          workspaceId: "room-1",
+          container: {} as any,
+          exec: {} as any,
+          stream: {} as any,
+          callback: { onData: vi.fn(), onExit: vi.fn() },
+        })
+        .mockResolvedValueOnce({
+          sessionId: "legit-server-id-2",
+          roomId: "room-1",
+          workspaceId: "room-1",
+          container: {} as any,
+          exec: {} as any,
+          stream: {} as any,
+          callback: { onData: vi.fn(), onExit: vi.fn() },
+        });
+
+      gateway.handleConnection(socketA as unknown as TerminalSocket);
+      gateway.handleConnection(socketB as unknown as TerminalSocket);
+
+      socketA.simulateClientEvent("terminal:create", { roomId: "room-1" });
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
+
+      // Socket B attempts to pass a spoofed sessionId aiming to replace or hijack
+      socketB.simulateClientEvent("terminal:create", {
+        roomId: "room-1",
+        sessionId: "legit-server-id-1",
+      });
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
+
+      expect(mockRunner.createSession).toHaveBeenLastCalledWith(
+        expect.not.objectContaining({ sessionId: "legit-server-id-1" }),
+        expect.any(Object)
+      );
+      expect(socketB.emit).toHaveBeenCalledWith("terminal:created", {
+        sessionId: "legit-server-id-2",
+      });
+
+      // Socket B still cannot access legit-server-id-1
+      socketB.simulateClientEvent("terminal:data", {
+        sessionId: "legit-server-id-1",
+        data: "exploit\n",
+      });
+      expect(mockRunner.write).not.toHaveBeenCalledWith("legit-server-id-1", expect.anything());
+    });
+
+    it("cleans up orphaned terminal session if socket disconnects during startup", async () => {
+      const mockRunner = createMockRunner();
+      const gateway = new TerminalGateway({ runner: mockRunner });
+      const socket = new MockSocket("socket-race");
+
+      let resolveSessionStartup!: (value: any) => void;
+      const delayedStartupPromise = new Promise((resolve) => {
+        resolveSessionStartup = resolve;
+      });
+
+      vi.mocked(mockRunner.createSession).mockImplementation(async () => {
+        return (await delayedStartupPromise) as any;
+      });
+
+      gateway.handleConnection(socket as unknown as TerminalSocket);
+
+      // Socket starts creation
+      socket.simulateClientEvent("terminal:create", { roomId: "room-slow-startup" });
+
+      // Socket leaves / disconnects before container startup completes
+      socket.simulateClientEvent("disconnect");
+
+      // Startup finishes afterwards
+      resolveSessionStartup({
+        sessionId: "orphan-session-999",
+        roomId: "room-slow-startup",
+        workspaceId: "room-slow-startup",
+        container: {} as any,
+        exec: {} as any,
+        stream: {} as any,
+        callback: { onData: vi.fn(), onExit: vi.fn() },
+      });
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, 20);
+      });
+
+      // Gateway must have caught the disconnect, killed the orphan immediately, and not tracked it
+      expect(mockRunner.killSession).toHaveBeenCalledWith("orphan-session-999");
+      expect(gateway.getSessionIdsForSocket("socket-race").size).toBe(0);
+      expect(socket.emit).not.toHaveBeenCalledWith("terminal:created", expect.anything());
     });
   });
 });

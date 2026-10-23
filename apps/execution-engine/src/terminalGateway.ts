@@ -47,11 +47,6 @@ function validateTerminalCreate(payload: unknown): { error?: string; validated?:
         return { error: "Invalid payload: roomId must be a non-empty string" };
     }
 
-    const sessionId = payload["sessionId"];
-    if (sessionId !== undefined && !isValidIdentifier(sessionId)) {
-        return { error: "Invalid payload: sessionId must be a non-empty string" };
-    }
-
     const cols = payload["cols"];
     if (cols !== undefined && !isValidInteger(cols, MIN_COLS, MAX_COLS)) {
         return { error: `Invalid payload: cols must be an integer between ${MIN_COLS} and ${MAX_COLS}` };
@@ -86,7 +81,6 @@ function validateTerminalCreate(payload: unknown): { error?: string; validated?:
 
     const validated: TerminalCreatePayload = {
         roomId: payload["roomId"],
-        ...(typeof sessionId === "string" ? { sessionId } : {}),
         ...(typeof cols === "number" ? { cols } : {}),
         ...(typeof rows === "number" ? { rows } : {}),
         ...(typeof workspaceId === "string" ? { workspaceId } : {}),
@@ -194,6 +188,7 @@ function validateTerminalKill(payload: unknown): {
 export class TerminalGateway {
     private readonly runner: TerminalRunner;
     private readonly socketSessions = new Map<string, Set<string>>();
+    private readonly connectedSockets = new Set<string>();
 
     constructor(options: TerminalGatewayOptions = {}) {
         this.runner = options.runner ?? new TerminalRunner();
@@ -214,14 +209,12 @@ export class TerminalGateway {
     }
 
     public handleConnection(socket: TerminalSocket): void {
+        this.connectedSockets.add(socket.id);
+
         socket.on("terminal:create", async (rawPayload: TerminalCreatePayload) => {
             const { error, validated } = validateTerminalCreate(rawPayload);
             if (error || !validated) {
-                const sessionId = isRecord(rawPayload) && typeof rawPayload["sessionId"] === "string"
-                    ? rawPayload["sessionId"]
-                    : undefined;
                 socket.emit("terminal:error", {
-                    sessionId,
                     error: error ?? "Invalid terminal:create payload",
                 });
                 return;
@@ -247,12 +240,16 @@ export class TerminalGateway {
                     },
                 });
 
+                if (!this.connectedSockets.has(socket.id)) {
+                    await this.runner.killSession(session.sessionId);
+                    return;
+                }
+
                 this.trackSession(socket.id, session.sessionId);
                 socket.emit("terminal:created", { sessionId: session.sessionId });
             } catch (err: unknown) {
                 const message = err instanceof Error ? err.message : String(err);
                 socket.emit("terminal:error", {
-                    sessionId: validated.sessionId,
                     error: message,
                 });
             }
@@ -269,6 +266,14 @@ export class TerminalGateway {
             }
 
             try {
+                if (!this.isSessionOwnedBySocket(socket.id, validated.sessionId)) {
+                    socket.emit("terminal:error", {
+                        sessionId: validated.sessionId,
+                        error: "Terminal session not found or unauthorized",
+                    });
+                    return;
+                }
+
                 this.runner.write(validated.sessionId, validated.data);
             } catch (err: unknown) {
                 const message = err instanceof Error ? err.message : String(err);
@@ -290,6 +295,14 @@ export class TerminalGateway {
             }
 
             try {
+                if (!this.isSessionOwnedBySocket(socket.id, validated.sessionId)) {
+                    socket.emit("terminal:error", {
+                        sessionId: validated.sessionId,
+                        error: "Terminal session not found or unauthorized",
+                    });
+                    return;
+                }
+
                 await this.runner.resize(validated.sessionId, validated.cols, validated.rows);
             } catch (err: unknown) {
                 const message = err instanceof Error ? err.message : String(err);
@@ -311,6 +324,14 @@ export class TerminalGateway {
             }
 
             try {
+                if (!this.isSessionOwnedBySocket(socket.id, validated.sessionId)) {
+                    socket.emit("terminal:error", {
+                        sessionId: validated.sessionId,
+                        error: "Terminal session not found or unauthorized",
+                    });
+                    return;
+                }
+                
                 await this.runner.killSession(validated.sessionId);
                 this.untrackSession(socket.id, validated.sessionId);
             } catch (err: unknown) {
@@ -323,6 +344,7 @@ export class TerminalGateway {
         });
 
         socket.on("disconnect", async () => {
+            this.connectedSockets.delete(socket.id);
             const sessionIds = this.socketSessions.get(socket.id);
             if (sessionIds) {
                 for (const sessionId of Array.from(sessionIds)) {
@@ -336,6 +358,11 @@ export class TerminalGateway {
                 this.socketSessions.delete(socket.id);
             }
         });
+    }
+
+    private isSessionOwnedBySocket(socketId: string, sessionId: string): boolean {
+        const sessions = this.socketSessions.get(socketId);
+        return sessions !== undefined && sessions.has(sessionId);
     }
 
     private trackSession(socketId: string, sessionId: string): void {

@@ -33,7 +33,6 @@ export interface ExecutionFile {
 }
 
 export interface TerminalCreatePayload {
-  readonly sessionId?: string;
   readonly roomId: string;
   readonly cols?: number;
   readonly rows?: number;
