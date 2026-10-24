@@ -242,9 +242,23 @@ export class FsWatcher {
 
     private async dispatchCurrentEvent(event: FsWatchEvent): Promise<void> {
         let content = event.content;
+        const absPath = path.resolve(this.rootDir, event.path);
+
+        let ancestor = path.dirname(absPath);
+        while (ancestor.length >= this.rootDir.length) {
+            try {
+                const realAncestor = await fs.realpath(ancestor);
+                if (realAncestor !== this.rootDir && !realAncestor.startsWith(this.rootDir + path.sep)) {
+                    return;
+                }
+                break;
+            } catch {
+                ancestor = path.dirname(ancestor);
+            }
+        }
+
         if (event.type === "add" || event.type === "change" || event.type === "addDir") {
             try {
-                const absPath = path.resolve(this.rootDir, event.path);
                 const realPath = await fs.realpath(absPath);
                 if (!realPath.startsWith(this.rootDir + path.sep) ||
                     isCleanBoundaryIgnored(path.relative(this.rootDir, realPath))) {
