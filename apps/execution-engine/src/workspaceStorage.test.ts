@@ -145,5 +145,274 @@ describe("WorkspaceStorage", () => {
       );
     });
   });
+
+  describe("symlink containment and race condition security", () => {
+    let outsideDir: string;
+
+    beforeEach(async () => {
+      outsideDir = await fs.mkdtemp(path.join(os.tmpdir(), "tessera-outside-victim-"));
+    });
+
+    afterEach(async () => {
+      await fs.rm(outsideDir, { recursive: true, force: true });
+    });
+
+    it("handles normal nested paths for read, write, directory creation, rename, and deletion", async () => {
+      const workspaceId = "room-test-nested";
+      await storage.initWorkspace(workspaceId);
+
+      await storage.createFolder(workspaceId, "src/components");
+      await storage.writeFiles(workspaceId, [
+        { path: "src/components/Header.tsx", content: "export const Header = () => null;" },
+      ]);
+
+      const content = await storage.readFile(workspaceId, "src/components/Header.tsx");
+      expect(content).toBe("export const Header = () => null;");
+
+      await storage.renamePath(
+        workspaceId,
+        "src/components/Header.tsx",
+        "src/components/MainHeader.tsx"
+      );
+
+      const renamedContent = await storage.readFile(workspaceId, "src/components/MainHeader.tsx");
+      expect(renamedContent).toBe("export const Header = () => null;");
+
+      expect(
+        await storage.checkSymlinkContainment(workspaceId, "src/components/MainHeader.tsx")
+      ).toBe(true);
+
+      await storage.deletePath(workspaceId, "src/components/MainHeader.tsx");
+      await expect(storage.readFile(workspaceId, "src/components/MainHeader.tsx")).rejects.toThrow();
+    });
+
+    it("rejects operations with an external symlink ancestor and protects outside files", async () => {
+      const workspaceId = "room-test-ext-ancestor";
+      await storage.initWorkspace(workspaceId);
+
+      const canaryPath = path.join(outsideDir, "canary.txt");
+      await fs.writeFile(canaryPath, "CANARY ORIGINAL DATA", "utf-8");
+
+      const workspacePath = storage.getWorkspacePath(workspaceId);
+      const symlinkAncestor = path.join(workspacePath, "ext_ancestor");
+      await fs.symlink(outsideDir, symlinkAncestor);
+
+      expect(
+        await storage.checkSymlinkContainment(workspaceId, "ext_ancestor/canary.txt")
+      ).toBe(false);
+
+      await expect(
+        storage.readFile(workspaceId, "ext_ancestor/canary.txt")
+      ).rejects.toThrow("Path traversal attempt detected");
+
+      await expect(
+        storage.writeFiles(workspaceId, [
+          { path: "ext_ancestor/canary.txt", content: "MALICIOUS OVERWRITE" },
+        ])
+      ).rejects.toThrow("Path traversal attempt detected");
+
+      await expect(
+        storage.createFolder(workspaceId, "ext_ancestor/forbidden_folder")
+      ).rejects.toThrow("Path traversal attempt detected");
+
+      await expect(
+        storage.deletePath(workspaceId, "ext_ancestor/canary.txt")
+      ).rejects.toThrow("Path traversal attempt detected");
+
+      await expect(
+        storage.renamePath(workspaceId, "ext_ancestor/canary.txt", "safe.txt")
+      ).rejects.toThrow("Path traversal attempt detected");
+
+      await storage.writeFiles(workspaceId, [{ path: "safe.txt", content: "safe" }]);
+      await expect(
+        storage.renamePath(workspaceId, "safe.txt", "ext_ancestor/safe.txt")
+      ).rejects.toThrow("Path traversal attempt detected");
+
+      const canaryContentAfter = await fs.readFile(canaryPath, "utf-8");
+      expect(canaryContentAfter).toBe("CANARY ORIGINAL DATA");
+
+      const outsideFiles = await fs.readdir(outsideDir);
+      expect(outsideFiles).toEqual(["canary.txt"]);
+    });
+
+    it("rejects operations targeting an escaping symlink target and protects outside files", async () => {
+      const workspaceId = "room-test-escaping-target";
+      await storage.initWorkspace(workspaceId);
+
+      const outsideFilePath = path.join(outsideDir, "secret.txt");
+      await fs.writeFile(outsideFilePath, "TOP SECRET DATA", "utf-8");
+
+      const workspacePath = storage.getWorkspacePath(workspaceId);
+      const linkPath = path.join(workspacePath, "escaping_link.txt");
+      await fs.symlink(outsideFilePath, linkPath);
+
+      expect(
+        await storage.checkSymlinkContainment(workspaceId, "escaping_link.txt")
+      ).toBe(false);
+
+      await expect(
+        storage.readFile(workspaceId, "escaping_link.txt")
+      ).rejects.toThrow("Path traversal attempt detected");
+
+      await expect(
+        storage.writeFiles(workspaceId, [
+          { path: "escaping_link.txt", content: "CORRUPTED DATA" },
+        ])
+      ).rejects.toThrow("Path traversal attempt detected");
+
+      await expect(
+        storage.renamePath(workspaceId, "escaping_link.txt", "moved.txt")
+      ).rejects.toThrow("Path traversal attempt detected");
+
+      await storage.writeFiles(workspaceId, [{ path: "source.txt", content: "source" }]);
+      await expect(
+        storage.renamePath(workspaceId, "source.txt", "escaping_link.txt")
+      ).rejects.toThrow("Path traversal attempt detected");
+
+      const outsideContentAfter = await fs.readFile(outsideFilePath, "utf-8");
+      expect(outsideContentAfter).toBe("TOP SECRET DATA");
+    });
+
+    it("rejects operations encountering a broken symlink", async () => {
+      const workspaceId = "room-test-broken-link";
+      await storage.initWorkspace(workspaceId);
+
+      const workspacePath = storage.getWorkspacePath(workspaceId);
+      const brokenTarget = path.join(tempBaseDir, "nonexistent-target-12345");
+      const brokenLink = path.join(workspacePath, "broken_link");
+      await fs.symlink(brokenTarget, brokenLink);
+
+      expect(
+        await storage.checkSymlinkContainment(workspaceId, "broken_link")
+      ).toBe(false);
+
+      expect(
+        await storage.checkSymlinkContainment(workspaceId, "broken_link/sub.txt")
+      ).toBe(false);
+
+      await expect(
+        storage.readFile(workspaceId, "broken_link")
+      ).rejects.toThrow("broken symlink");
+
+      await expect(
+        storage.writeFiles(workspaceId, [
+          { path: "broken_link", content: "content" },
+        ])
+      ).rejects.toThrow("broken symlink");
+
+      await expect(
+        storage.readFile(workspaceId, "broken_link/sub.txt")
+      ).rejects.toThrow("broken symlink");
+
+      await expect(
+        storage.writeFiles(workspaceId, [
+          { path: "broken_link/sub.txt", content: "content" },
+        ])
+      ).rejects.toThrow("broken symlink");
+
+      await expect(
+        storage.createFolder(workspaceId, "broken_link/subfolder")
+      ).rejects.toThrow("broken symlink");
+
+      await expect(
+        storage.deletePath(workspaceId, "broken_link/sub.txt")
+      ).rejects.toThrow("broken symlink");
+
+      await expect(
+        storage.renamePath(workspaceId, "broken_link", "dest")
+      ).rejects.toThrow("broken symlink");
+    });
+
+    it("prevents workspace root deletion and operations on workspace root", async () => {
+      const workspaceId = "room-test-root-protection";
+      await storage.initWorkspace(workspaceId);
+
+      await expect(
+        storage.deletePath(workspaceId, "")
+      ).rejects.toThrow("Cannot delete workspace root directory via deletePath");
+
+      await expect(
+        storage.deletePath(workspaceId, ".")
+      ).rejects.toThrow("Cannot delete workspace root directory via deletePath");
+
+      await expect(
+        storage.deletePath(workspaceId, "sub/../.")
+      ).rejects.toThrow("escapes workspace boundary");
+
+      await expect(
+        storage.renamePath(workspaceId, ".", "dest")
+      ).rejects.toThrow("Cannot operate on workspace root directory");
+
+      await expect(
+        storage.renamePath(workspaceId, "file.txt", ".")
+      ).rejects.toThrow("Cannot operate on workspace root directory");
+
+      expect(await storage.isWorkspaceInitialized(workspaceId)).toBe(true);
+    });
+
+    it("defends against concurrent path replacement and guarantees outside files are never read or modified", async () => {
+      const workspaceId = "room-test-concurrent-race";
+      await storage.initWorkspace(workspaceId);
+
+      const canaryPath = path.join(outsideDir, "canary.txt");
+      await fs.writeFile(canaryPath, "CRITICAL UNTOUCHED CANARY", "utf-8");
+
+      const workspacePath = storage.getWorkspacePath(workspaceId);
+      const racedDir = path.join(workspacePath, "raced_dir");
+      await fs.mkdir(racedDir);
+
+      let stop = false;
+      const swapperPromise = (async () => {
+        while (!stop) {
+          try {
+            await fs.rm(racedDir, { recursive: true, force: true });
+            await fs.symlink(outsideDir, racedDir);
+            await new Promise((resolve) => {
+              setTimeout(resolve, 1);
+            });
+            await fs.rm(racedDir, { recursive: true, force: true });
+            await fs.mkdir(racedDir);
+            await new Promise((resolve) => {
+              setTimeout(resolve, 1);
+            });
+          } catch {
+            // Concurrency error during swap
+          }
+        }
+      })();
+
+      const operations: Promise<void>[] = [];
+      for (let i = 0; i < 30; i++) {
+        operations.push(
+          (async () => {
+            try {
+              await storage.writeFiles(workspaceId, [
+                { path: "raced_dir/canary.txt", content: "ATTACK RACE WRITE" },
+              ]);
+            } catch {
+              // Expected to fail safely when symlink is present
+            }
+
+            try {
+              const data = await storage.readFile(workspaceId, "raced_dir/canary.txt");
+              expect(data).not.toBe("CRITICAL UNTOUCHED CANARY");
+            } catch {
+              // Expected to fail safely when symlink is present
+            }
+          })()
+        );
+      }
+
+      await Promise.all(operations);
+      stop = true;
+      await swapperPromise;
+
+      const canaryContentAfter = await fs.readFile(canaryPath, "utf-8");
+      expect(canaryContentAfter).toBe("CRITICAL UNTOUCHED CANARY");
+
+      const outsideFiles = await fs.readdir(outsideDir);
+      expect(outsideFiles).toEqual(["canary.txt"]);
+    });
+  });
 });
 
