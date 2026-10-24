@@ -391,5 +391,61 @@ describe("WorkspaceSyncBridge", () => {
             expect(file).toBeDefined();
             expect(bridge.workspace.getFileContent(file!.id)).toBe("export const x = 42;");
         });
+
+        it("never imports node_modules, .git, or build caches into Yjs during reconciliation", async () => {
+            const wsPath = path.join(tempBaseDir, workspaceId);
+            await fs.mkdir(path.join(wsPath, "node_modules", "express"), { recursive: true });
+            await fs.writeFile(path.join(wsPath, "node_modules", "express", "index.js"), "express code");
+            await fs.mkdir(path.join(wsPath, ".git"), { recursive: true });
+            await fs.writeFile(path.join(wsPath, ".git", "HEAD"), "ref: refs/heads/main");
+            await fs.mkdir(path.join(wsPath, "dist"), { recursive: true });
+            await fs.writeFile(path.join(wsPath, "dist", "main.js"), "dist code");
+
+            await bridge.reconcileInitialState();
+
+            const allFiles = bridge.workspace.getFiles();
+            const allFolders = bridge.workspace.getFolders();
+
+            expect(allFiles.some((f) => f.name.includes("node_modules") || f.name === "index.js")).toBe(false);
+            expect(allFiles.some((f) => f.name.includes(".git") || f.name === "HEAD")).toBe(false);
+            expect(allFiles.some((f) => f.name.includes("dist") || f.name === "main.js")).toBe(false);
+
+            expect(allFolders.some((f) => f.name === "node_modules" || f.name === ".git" || f.name === "dist")).toBe(false);
+        });
+
+        it("reports binary assets in tree without inserting binary data into Y.Text", async () => {
+            const wsPath = path.join(tempBaseDir, workspaceId);
+            const binaryData = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x0d, 0x0a, 0x1a]);
+            await fs.writeFile(path.join(wsPath, "logo.png"), binaryData);
+
+            await bridge.reconcileInitialState();
+
+            const file = bridge.workspace.getFiles().find((f) => f.name === "logo.png");
+            expect(file).toBeDefined();
+            expect(file?.language).toBe("binary");
+            expect(bridge.workspace.getFileContent(file!.id)).toBe("");
+            expect(bridge.workspace.getFileText(file!.id).length).toBe(0);
+
+            // Wait a debounce cycle to verify binary file on disk was not overwritten
+            await new Promise((resolve) => setTimeout(resolve, 80));
+            const diskContent = await fs.readFile(path.join(wsPath, "logo.png"));
+            expect(diskContent).toEqual(binaryData);
+        });
+
+        it("reports oversized files in tree without loading file content into Y.Text", async () => {
+            const wsPath = path.join(tempBaseDir, workspaceId);
+            const oversizedPath = path.join(wsPath, "large-dataset.csv");
+            const handle = await fs.open(oversizedPath, "w");
+            await handle.truncate(2.5 * 1024 * 1024);
+            await handle.close();
+
+            await bridge.reconcileInitialState();
+
+            const file = bridge.workspace.getFiles().find((f) => f.name === "large-dataset.csv");
+            expect(file).toBeDefined();
+            expect(file?.language).toBe("unsupported");
+            expect(bridge.workspace.getFileContent(file!.id)).toBe("");
+            expect(bridge.workspace.getFileText(file!.id).length).toBe(0);
+        });
     });
 });
