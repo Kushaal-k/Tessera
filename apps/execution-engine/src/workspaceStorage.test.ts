@@ -145,5 +145,112 @@ describe("WorkspaceStorage", () => {
       );
     });
   });
+
+  describe("symlink containment and directory scanning", () => {
+    it("rejects writes through external symlink ancestors", async () => {
+      const workspaceId = "room-test-symlink-ancestor";
+      await storage.initWorkspace(workspaceId);
+      const wsPath = storage.getWorkspacePath(workspaceId);
+
+      const outsideDir = await fs.mkdtemp(path.join(os.tmpdir(), "tessera-outside-"));
+      try {
+        await fs.symlink(outsideDir, path.join(wsPath, "linked-dir"));
+
+        await expect(
+          storage.writeFiles(workspaceId, [{ path: "linked-dir/danger.txt", content: "bad" }])
+        ).rejects.toThrow("Path traversal attempt detected: symlink escapes workspace boundary");
+
+        await expect(
+          storage.readFile(workspaceId, "linked-dir/danger.txt")
+        ).rejects.toThrow("Path traversal attempt detected: symlink escapes workspace boundary");
+      } finally {
+        await fs.rm(outsideDir, { recursive: true, force: true });
+      }
+    });
+
+    it("rejects writes, reads, and renames targeting escaping symlink files", async () => {
+      const workspaceId = "room-test-symlink-target";
+      await storage.initWorkspace(workspaceId);
+      const wsPath = storage.getWorkspacePath(workspaceId);
+
+      const outsideFile = path.join(os.tmpdir(), `tessera-target-${Date.now()}.txt`);
+      await fs.writeFile(outsideFile, "host secret", "utf-8");
+      try {
+        await fs.symlink(outsideFile, path.join(wsPath, "symlink-file.txt"));
+
+        await expect(
+          storage.readFile(workspaceId, "symlink-file.txt")
+        ).rejects.toThrow("Path traversal attempt detected: symlink escapes workspace boundary");
+
+        await expect(
+          storage.writeFiles(workspaceId, [{ path: "symlink-file.txt", content: "overwrite" }])
+        ).rejects.toThrow("Path traversal attempt detected: symlink escapes workspace boundary");
+
+        await expect(
+          storage.renamePath(workspaceId, "symlink-file.txt", "safe-name.txt")
+        ).rejects.toThrow("Path traversal attempt detected: symlink escapes workspace boundary");
+      } finally {
+        await fs.rm(outsideFile, { force: true });
+      }
+    });
+
+    it("prevents deleting workspace root directory via deletePath", async () => {
+      const workspaceId = "room-test-root-delete";
+      await storage.initWorkspace(workspaceId);
+
+      await expect(storage.deletePath(workspaceId, ".")).rejects.toThrow(
+        "Cannot delete workspace root directory via deletePath"
+      );
+    });
+
+    it("excludes clean boundary patterns and respects entry limits in listEntries", async () => {
+      const workspaceId = "room-test-list-entries";
+      await storage.initWorkspace(workspaceId);
+      const wsPath = storage.getWorkspacePath(workspaceId);
+
+      await fs.mkdir(path.join(wsPath, "src"), { recursive: true });
+      await fs.writeFile(path.join(wsPath, "src", "index.ts"), "content");
+      await fs.writeFile(path.join(wsPath, "package.json"), "{}");
+
+      await fs.mkdir(path.join(wsPath, "node_modules", "pkg"), { recursive: true });
+      await fs.writeFile(path.join(wsPath, "node_modules", "pkg", "index.js"), "code");
+      await fs.mkdir(path.join(wsPath, ".git", "objects"), { recursive: true });
+      await fs.writeFile(path.join(wsPath, ".git", "HEAD"), "ref");
+      await fs.mkdir(path.join(wsPath, "dist"), { recursive: true });
+      await fs.writeFile(path.join(wsPath, "dist", "bundle.js"), "bundled");
+
+      const entries = await storage.listEntries(workspaceId);
+      expect(entries.files).toContain("src/index.ts");
+      expect(entries.files).toContain("package.json");
+      expect(entries.folders).toContain("src");
+
+      expect(entries.files.some((f) => f.includes("node_modules"))).toBe(false);
+      expect(entries.files.some((f) => f.includes(".git"))).toBe(false);
+      expect(entries.files.some((f) => f.includes("dist"))).toBe(false);
+      expect(entries.folders.some((f) => f.includes("node_modules"))).toBe(false);
+      expect(entries.folders.some((f) => f.includes(".git"))).toBe(false);
+      expect(entries.folders.some((f) => f.includes("dist"))).toBe(false);
+    });
+
+    it("skips escaping symlinks during listEntries", async () => {
+      const workspaceId = "room-test-symlink-list";
+      await storage.initWorkspace(workspaceId);
+      const wsPath = storage.getWorkspacePath(workspaceId);
+
+      const outsideDir = await fs.mkdtemp(path.join(os.tmpdir(), "tessera-outside-list-"));
+      await fs.writeFile(path.join(outsideDir, "secret.txt"), "secret");
+      try {
+        await fs.symlink(outsideDir, path.join(wsPath, "outside-link"));
+        await fs.writeFile(path.join(wsPath, "normal.txt"), "normal");
+
+        const entries = await storage.listEntries(workspaceId);
+        expect(entries.files).toContain("normal.txt");
+        expect(entries.files.some((f) => f.includes("secret.txt"))).toBe(false);
+        expect(entries.folders.some((f) => f.includes("outside-link"))).toBe(false);
+      } finally {
+        await fs.rm(outsideDir, { recursive: true, force: true });
+      }
+    });
+  });
 });
 

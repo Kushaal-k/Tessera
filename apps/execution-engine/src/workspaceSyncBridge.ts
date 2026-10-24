@@ -14,6 +14,7 @@ import type {
 } from "@tessera/shared-types";
 import type { FsWatcher } from "./fsWatcher.js";
 import type { WorkspaceStorage } from "./workspaceStorage.js";
+import { isCleanBoundaryIgnored, inspectFileForSync } from "./workspacePolicy.js";
 import {
     ensureFolderHierarchy,
     findFileByPath,
@@ -99,7 +100,6 @@ export class WorkspaceSyncBridge {
             ydoc: this.doc,
             awareness: this.awareness,
         });
-        // The provider applies sync-step-2 before this listener reconciles disk.
         this.socket.on("sync-step-2", this.handleSynchronized);
         this.socket.on("disconnect", this.handleDisconnect);
         this.socket.on("connect", this.joinAndSync);
@@ -112,8 +112,13 @@ export class WorkspaceSyncBridge {
         // Initialize tracked files and text observers for outbound sync (Y.Doc -> Disk)
         for (const file of this.workspace.getFiles()) {
             const relPath = getRelativeFilePath(file, this.workspace.getFolders());
+            if (isCleanBoundaryIgnored(relPath)) {
+                continue;
+            }
             this.trackedFiles.set(file.id, relPath);
-            this.attachTextObserver(file.id);
+            if (file.language !== "binary" && file.language !== "unsupported" && file.language !== "oversized") {
+                this.attachTextObserver(file.id);
+            }
         }
 
         this.unsubscribeFiles = this.workspace.onFilesChanged(() => {
@@ -171,7 +176,7 @@ export class WorkspaceSyncBridge {
         }
 
         const cleanPath = event.path.replace(/^\/+/, "").trim();
-        if (!cleanPath) {
+        if (!cleanPath || isCleanBoundaryIgnored(cleanPath)) {
             return;
         }
 
@@ -271,11 +276,18 @@ export class WorkspaceSyncBridge {
         try {
             await this.folderSyncPromise;
             const diskEntries = await this.storage.listEntries(this.workspaceId);
-            const diskFiles = diskEntries.files;
-            const diskFolderSet = new Set(diskEntries.folders);
+            const diskFiles = diskEntries.files.filter((p) => {
+                return !isCleanBoundaryIgnored(p);
+            });
+            const diskFolderSet = new Set(diskEntries.folders.filter((p) => {
+                return !isCleanBoundaryIgnored(p);
+            }));
             const initialFolders = this.workspace.getFolders();
             for (const folder of initialFolders) {
                 const relPath = getRelativeFolderPath(folder, initialFolders);
+                if (isCleanBoundaryIgnored(relPath)) {
+                    continue;
+                }
                 if (!diskFolderSet.has(relPath)) {
                     await this.storage.createFolder(this.workspaceId, relPath);
                 }
@@ -283,6 +295,9 @@ export class WorkspaceSyncBridge {
             }
             this.doc.transact(() => {
                 for (const folderPath of diskEntries.folders) {
+                    if (isCleanBoundaryIgnored(folderPath)) {
+                        continue;
+                    }
                     ensureFolderHierarchy(folderPath, this.workspace);
                 }
             }, FS_ORIGIN);
@@ -306,6 +321,12 @@ export class WorkspaceSyncBridge {
 
             // Case 1: File in CRDT but not on disk -> populate disk
             for (const [relPath, file] of crdtFileMap.entries()) {
+                if (isCleanBoundaryIgnored(relPath)) {
+                    continue;
+                }
+                if (file.language === "binary" || file.language === "unsupported" || file.language === "oversized") {
+                    continue;
+                }
                 if (!diskFileSet.has(relPath)) {
                     const content = this.workspace.getFileContent(file.id) ?? "";
                     this.diskContents.set(relPath, content);
@@ -320,10 +341,22 @@ export class WorkspaceSyncBridge {
 
             // Case 2: File on disk but not in CRDT -> import into CRDT
             for (const diskRelPath of diskFiles) {
+                if (isCleanBoundaryIgnored(diskRelPath)) {
+                    continue;
+                }
                 if (!crdtFileMap.has(diskRelPath)) {
                     try {
-                        const content = await this.storage.readFile(this.workspaceId, diskRelPath);
-                        this.diskContents.set(diskRelPath, content);
+                        const targetPath = this.storage.resolveSafePath(this.workspaceId, diskRelPath);
+                        const inspection = await inspectFileForSync(
+                            targetPath,
+                            diskRelPath,
+                            this.hostWorkspacePath,
+                        );
+
+                        if (inspection.reason === "ignored") {
+                            continue;
+                        }
+
                         const parts = diskRelPath.split("/").filter(Boolean);
                         const fileName = parts.pop();
                         if (!fileName) {
@@ -331,31 +364,66 @@ export class WorkspaceSyncBridge {
                         }
                         const parentPath = parts.join("/");
 
-                        this.doc.transact(() => {
-                            const parentId = parentPath
-                                ? ensureFolderHierarchy(parentPath, this.workspace)
-                                : null;
-                            const res = this.workspace.createFile(fileName, {
-                                parentId,
-                                initialContent: content,
-                            });
-                            if (res.success && res.file) {
-                                this.trackedFiles.set(res.file.id, diskRelPath);
-                                this.attachTextObserver(res.file.id);
-                            }
-                        }, FS_ORIGIN);
+                        if (inspection.eligible && inspection.content !== undefined) {
+                            this.diskContents.set(diskRelPath, inspection.content);
+                            this.doc.transact(() => {
+                                const parentId = parentPath
+                                    ? ensureFolderHierarchy(parentPath, this.workspace)
+                                    : null;
+                                const res = this.workspace.createFile(fileName, {
+                                    parentId,
+                                    initialContent: inspection.content,
+                                });
+                                if (res.success && res.file) {
+                                    this.trackedFiles.set(res.file.id, diskRelPath);
+                                    this.attachTextObserver(res.file.id);
+                                }
+                            }, FS_ORIGIN);
+                        } else if (inspection.reason === "binary" || inspection.reason === "oversized") {
+                            this.doc.transact(() => {
+                                const parentId = parentPath
+                                    ? ensureFolderHierarchy(parentPath, this.workspace)
+                                    : null;
+                                const res = this.workspace.createFile(fileName, {
+                                    parentId,
+                                    language: inspection.reason === "binary" ? "binary" : "unsupported",
+                                    initialContent: "",
+                                });
+                                if (res.success && res.file) {
+                                    this.trackedFiles.set(res.file.id, diskRelPath);
+                                }
+                            }, FS_ORIGIN);
+                        }
                     } catch {
-                        // Ignore unreadable or binary file
+                        // Ignore unreadable or failed inspection
                     }
                 }
             }
 
             // Case 3: File exists on both -> reconcile content
             for (const [relPath, file] of crdtFileMap.entries()) {
+                if (isCleanBoundaryIgnored(relPath)) {
+                    continue;
+                }
+                if (file.language === "binary" || file.language === "unsupported" || file.language === "oversized") {
+                    this.trackedFiles.set(file.id, relPath);
+                    continue;
+                }
                 if (diskFileSet.has(relPath)) {
                     try {
+                        const targetPath = this.storage.resolveSafePath(this.workspaceId, relPath);
+                        const inspection = await inspectFileForSync(
+                            targetPath,
+                            relPath,
+                            this.hostWorkspacePath,
+                        );
+
+                        if (!inspection.eligible || inspection.content === undefined) {
+                            continue;
+                        }
+
                         const contentBeforeRead = crdtContents.get(relPath) ?? "";
-                        const diskContent = await this.storage.readFile(this.workspaceId, relPath);
+                        const diskContent = inspection.content;
                         this.diskContents.set(relPath, diskContent);
                         const crdtContent = this.workspace.getFileContent(file.id) ?? "";
                         if (diskContent !== crdtContent && crdtContent === contentBeforeRead) {
@@ -378,7 +446,13 @@ export class WorkspaceSyncBridge {
                 this.handleFilesChanged();
                 this.handleFoldersChanged();
                 for (const file of this.workspace.getFiles()) {
+                    if (file.language === "binary" || file.language === "unsupported" || file.language === "oversized") {
+                        continue;
+                    }
                     const relPath = getRelativeFilePath(file, this.workspace.getFolders());
+                    if (isCleanBoundaryIgnored(relPath)) {
+                        continue;
+                    }
                     if (this.diskContents.get(relPath) !== this.workspace.getFileContent(file.id)) {
                         this.scheduleDebouncedDiskWrite(file.id);
                     }
@@ -389,6 +463,10 @@ export class WorkspaceSyncBridge {
 
     private scheduleDebouncedDiskWrite(fileId: string): void {
         if (!this.synchronized || this.isReconciling || this.destroyed) {
+            return;
+        }
+        const file = this.workspace.getFile(fileId);
+        if (!file || file.language === "binary" || file.language === "unsupported" || file.language === "oversized") {
             return;
         }
         const existingTimer = this.debounceTimers.get(fileId);
@@ -406,13 +484,16 @@ export class WorkspaceSyncBridge {
             if (this.destroyed) {
                 return;
             }
-            const file = this.workspace.getFile(fileId);
-            if (!file) {
+            const currentFile = this.workspace.getFile(fileId);
+            if (!currentFile || currentFile.language === "binary" || currentFile.language === "unsupported" || currentFile.language === "oversized") {
                 return;
             }
 
             const folders = this.workspace.getFolders();
-            const relPath = getRelativeFilePath(file, folders);
+            const relPath = getRelativeFilePath(currentFile, folders);
+            if (isCleanBoundaryIgnored(relPath)) {
+                return;
+            }
             const content = this.workspace.getFileContent(fileId) ?? "";
 
             const previousContent = this.diskContents.get(relPath);
@@ -438,6 +519,11 @@ export class WorkspaceSyncBridge {
 
     private attachTextObserver(fileId: string): void {
         if (this.textObservers.has(fileId)) {
+            return;
+        }
+
+        const file = this.workspace.getFile(fileId);
+        if (file && (file.language === "binary" || file.language === "unsupported" || file.language === "oversized")) {
             return;
         }
 
@@ -471,6 +557,15 @@ export class WorkspaceSyncBridge {
             currentFileIds.add(file.id);
             const newPath = getRelativeFilePath(file, folders);
             const oldPath = this.trackedFiles.get(file.id);
+
+            if (isCleanBoundaryIgnored(newPath)) {
+                continue;
+            }
+
+            if (file.language === "binary" || file.language === "unsupported" || file.language === "oversized") {
+                this.trackedFiles.set(file.id, newPath);
+                continue;
+            }
 
             if (!oldPath) {
                 // New file created in workspace
@@ -509,7 +604,7 @@ export class WorkspaceSyncBridge {
                     this.debounceTimers.delete(fileId);
                 }
 
-                if (!isFromWatcher) {
+                if (!isFromWatcher && !isCleanBoundaryIgnored(oldPath)) {
                     this.diskContents.delete(oldPath);
                     this.watcher.markRecentWrite(oldPath);
                     void this.storage.deletePath(this.workspaceId, oldPath).catch(() => {});
@@ -523,16 +618,21 @@ export class WorkspaceSyncBridge {
             return;
         }
         const folders = this.workspace.getFolders();
-        const currentPaths = new Map(folders.map((folder) => [
-            folder.id, getRelativeFolderPath(folder, folders),
-        ]));
+        const currentPaths = new Map(folders.map((folder) => {
+            return [folder.id, getRelativeFolderPath(folder, folders)];
+        }));
         const previousPaths = new Map(this.trackedFolders);
         this.trackedFolders.clear();
         for (const [id, folderPath] of currentPaths) {
-            this.trackedFolders.set(id, folderPath);
+            if (!isCleanBoundaryIgnored(folderPath)) {
+                this.trackedFolders.set(id, folderPath);
+            }
         }
         for (const file of this.workspace.getFiles()) {
-            this.trackedFiles.set(file.id, getRelativeFilePath(file, folders));
+            const rel = getRelativeFilePath(file, folders);
+            if (!isCleanBoundaryIgnored(rel)) {
+                this.trackedFiles.set(file.id, rel);
+            }
         }
         if (this.currentTransactionOrigin === FS_ORIGIN) {
             return;
@@ -543,9 +643,13 @@ export class WorkspaceSyncBridge {
                 return;
             }
             const renamedPaths: [string, string][] = [];
-            const orderedFolders = [...currentPaths].sort((a, b) =>
-                a[1].split("/").length - b[1].split("/").length,
-            );
+            const orderedFolders = [...currentPaths]
+                .filter(([, p]) => {
+                    return !isCleanBoundaryIgnored(p);
+                })
+                .sort((a, b) => {
+                    return a[1].split("/").length - b[1].split("/").length;
+                });
             for (const [id, newPath] of orderedFolders) {
                 const originalPath = previousPaths.get(id);
                 if (originalPath && originalPath !== newPath) {
@@ -570,10 +674,16 @@ export class WorkspaceSyncBridge {
                 }
             }
             const removedPaths = [...previousPaths]
-                .filter(([id]) => !currentPaths.has(id))
-                .map(([, folderPath]) => folderPath);
+                .filter(([id, folderPath]) => {
+                    return !currentPaths.has(id) && !isCleanBoundaryIgnored(folderPath);
+                })
+                .map(([, folderPath]) => {
+                    return folderPath;
+                });
             for (const folderPath of removedPaths) {
-                if (!removedPaths.some((parent) => folderPath.startsWith(`${parent}/`))) {
+                if (!removedPaths.some((parent) => {
+                    return folderPath.startsWith(`${parent}/`);
+                })) {
                     this.watcher.markRecentWrite(folderPath);
                     await this.storage.deletePath(this.workspaceId, folderPath);
                 }

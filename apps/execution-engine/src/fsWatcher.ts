@@ -3,6 +3,25 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as chokidar from "chokidar";
 import type { FsWatchEvent, FsWatchEventType } from "@tessera/shared-types";
+import {
+    MAX_SYNC_FILE_SIZE,
+    MAX_SYNC_FILE_COUNT,
+    BINARY_SAMPLE_SIZE,
+    CLEAN_BOUNDARY_PATTERNS,
+    isCleanBoundaryIgnored,
+    isBinaryBuffer,
+    inspectFileForSync,
+} from "./workspacePolicy.js";
+
+export {
+    MAX_SYNC_FILE_SIZE,
+    MAX_SYNC_FILE_COUNT,
+    BINARY_SAMPLE_SIZE,
+    CLEAN_BOUNDARY_PATTERNS,
+    isCleanBoundaryIgnored,
+    isBinaryBuffer,
+    inspectFileForSync,
+};
 
 export type FsWatchListener = (event: FsWatchEvent) => void;
 
@@ -12,40 +31,8 @@ export interface FsWatcherOptions {
     readonly maxFileSize?: number;
 }
 
-export const MAX_SYNC_FILE_SIZE = 2 * 1024 * 1024; // 2MB
-
-export const CLEAN_BOUNDARY_PATTERNS: readonly RegExp[] = [
-    /(?:^|[\\/])node_modules(?:[\\/]|$)/,
-    /(?:^|[\\/])\.git(?:[\\/]|$)/,
-    /(?:^|[\\/])\.npm(?:[\\/]|$)/,
-    /(?:^|[\\/])dist(?:[\\/]|$)/,
-    /(?:^|[\\/])\.turbo(?:[\\/]|$)/,
-    /(?:^|[\\/])\.cache(?:[\\/]|$)/,
-    /(?:^|[\\/])\.DS_Store$/,
-];
-
-export function isCleanBoundaryIgnored(targetPath: string): boolean {
-    for (const pattern of CLEAN_BOUNDARY_PATTERNS) {
-        if (pattern.test(targetPath)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 export function computeContentHash(content: string | Buffer): string {
     return crypto.createHash("sha256").update(content).digest("hex").slice(0, 16);
-}
-
-export function isBinaryBuffer(buffer: Buffer): boolean {
-    const checkLength = Math.min(buffer.length, 512);
-    for (let i = 0; i < checkLength; i++) {
-        if (buffer[i] === 0) {
-            return true;
-        }
-    }
-    return false;
 }
 
 interface WriteToken {
@@ -109,7 +96,6 @@ export class FsWatcher {
         }
 
         const now = Date.now();
-        // Purge expired tokens
         const validTokens = tokens.filter((t) => t.expiresAt > now);
         if (validTokens.length === 0) {
             this.pendingTokens.delete(normalized);
@@ -118,7 +104,6 @@ export class FsWatcher {
 
         const currentHash = content !== undefined ? computeContentHash(content) : undefined;
 
-        // If wildcard exists (e.g. for deletions), consume one-shot
         const wildcardIndex = validTokens.findIndex((t) => t.hash === "*");
         if (wildcardIndex !== -1 && (eventType === "unlink" || eventType === "unlinkDir")) {
             validTokens.splice(wildcardIndex, 1);
@@ -130,7 +115,6 @@ export class FsWatcher {
             return true;
         }
 
-        // If matching hash exists, consume one-shot
         if (currentHash !== undefined) {
             const matchIndex = validTokens.findIndex((t) => t.hash === currentHash);
             if (matchIndex !== -1) {
@@ -246,8 +230,10 @@ export class FsWatcher {
             try {
                 const absPath = path.resolve(this.rootDir, event.path);
                 const realPath = await fs.realpath(absPath);
-                if (!realPath.startsWith(this.rootDir + path.sep) ||
-                    isCleanBoundaryIgnored(path.relative(this.rootDir, realPath))) {
+                if (
+                    !realPath.startsWith(this.rootDir + path.sep) ||
+                    isCleanBoundaryIgnored(path.relative(this.rootDir, realPath))
+                ) {
                     return;
                 }
                 const stat = await fs.stat(absPath);
@@ -256,14 +242,16 @@ export class FsWatcher {
                         return;
                     }
                 } else {
-                    if (!stat.isFile() || stat.size > this.maxFileSize) {
+                    const inspection = await inspectFileForSync(
+                        absPath,
+                        event.path,
+                        this.rootDir,
+                        this.maxFileSize,
+                    );
+                    if (!inspection.eligible) {
                         return;
                     }
-                    const buffer = await fs.readFile(absPath);
-                    if (isBinaryBuffer(buffer)) {
-                        return;
-                    }
-                    content = buffer.toString("utf-8");
+                    content = inspection.content;
                 }
             } catch {
                 return;
