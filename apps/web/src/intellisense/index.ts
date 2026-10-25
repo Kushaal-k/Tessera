@@ -6,6 +6,7 @@ import { registerRustIntelliSense } from "./rust.js";
 
 const registeredLanguages = new Set<string>();
 
+//ensured that rust is also added as the return command may prevent addition of rust
 export function registerEditorIntelliSense(monaco: typeof Monaco) {
   if (!registeredLanguages.has("cpp")) {
     registerCppIntelliSense(monaco);
