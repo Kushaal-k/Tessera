@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 export interface SidePanelProps {
   readonly open: boolean;
@@ -19,41 +19,67 @@ export function SidePanel({
   footer,
   className = "",
 }: SidePanelProps) {
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open, onClose]);
+
   return (
-    <aside
-      aria-hidden={!open}
-      aria-label={title}
-      inert={!open ? true : undefined}
-      className={`fixed inset-y-0 right-0 z-40 flex w-full max-w-md transform flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl shadow-black/40 transition-transform duration-200 ease-out ${
-        open ? "translate-x-0" : "pointer-events-none translate-x-full"
-      } ${className}`}
-    >
-      <header className="flex min-h-14 items-start justify-between gap-4 border-b border-[var(--color-border)] px-4 py-3">
-        <div className="min-w-0">
-          <h2 className="truncate text-sm font-semibold text-white">{title}</h2>
-          {description ? (
-            <p className="mt-0.5 line-clamp-2 text-xs text-slate-400">
-              {description}
-            </p>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          aria-label={`Close ${title}`}
+    <>
+      {open ? (
+        <div
+          aria-hidden="true"
           onClick={onClose}
-          className="grid h-8 w-8 shrink-0 place-items-center rounded border border-[var(--color-border)] bg-[var(--color-bg)] text-lg leading-none text-slate-300 transition hover:border-tessera-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-tessera-500"
-        >
-          ×
-        </button>
-      </header>
-
-      <div className="flex-1 overflow-y-auto px-4 py-4">{children}</div>
-
-      {footer ? (
-        <footer className="border-t border-[var(--color-border)] px-4 py-3">
-          {footer}
-        </footer>
+          className="fixed inset-0 z-40 bg-black/75 backdrop-blur-xs transition-opacity duration-200"
+        />
       ) : null}
-    </aside>
+      <aside
+        aria-hidden={!open}
+        aria-label={title}
+        inert={!open ? true : undefined}
+        className={`fixed inset-y-0 right-0 z-50 flex w-full max-w-md transform flex-col border-l border-zinc-800 bg-[#09090b] shadow-2xl shadow-black ring-1 ring-white/5 transition-transform duration-200 ease-out ${
+          open ? "translate-x-0" : "pointer-events-none translate-x-full"
+        } ${className}`}
+      >
+        <header className="flex min-h-14 items-center justify-between gap-4 border-b border-zinc-800 px-5 py-3.5 bg-black/60">
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold tracking-tight text-white">{title}</h2>
+            {description ? (
+              <p className="mt-0.5 line-clamp-1 text-xs text-zinc-400">
+                {description}
+              </p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            aria-label={`Close ${title}`}
+            onClick={onClose}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white focus:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </header>
+
+        <div className="flex-1 overflow-y-auto p-5">{children}</div>
+
+        {footer ? (
+          <footer className="border-t border-zinc-800 px-5 py-3.5 bg-black/60">
+            {footer}
+          </footer>
+        ) : null}
+      </aside>
+    </>
   );
 }

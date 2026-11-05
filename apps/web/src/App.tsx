@@ -9,10 +9,12 @@ import { setLocalParticipant } from "@tessera/collaboration";
 import type {
   SyncConnectionConfig,
   WorkspaceFile,
+  SupportedLanguage,
 } from "@tessera/shared-types";
 import { useDebouncedValue } from "./hooks/useDebouncedValue.js";
 import { downloadTextFile } from "./utils/downloadUtils.js";
 import { collectDescendantFolderIds } from "./utils/workspaceUtils.js";
+import { getExecutionShortcutText } from "./utils/platformDetection.js";
 import { FileTree, type CreatingItemState } from "./components/FileTree.js";
 import { useWorkspace } from "./hooks/useWorkspace.js";
 import { useTabManager } from "./hooks/useTabManager.js";
@@ -22,7 +24,16 @@ import { BottomPanel, type BottomPanelTab } from "./components/BottomPanel.js";
 import { ResizableLayout } from "./components/ResizableLayout.js";
 import { EditorSettings } from "./components/EditorSettings.js";
 import { TabBar } from "./components/TabBar.js";
-import { FilePlus, FolderPlus, Loader2, FileCode } from "lucide-react";
+import { AiAssistantPanel } from "./components/AiAssistantPanel.js";
+import {
+  FilePlus,
+  FolderPlus,
+  Loader2,
+  Code2,
+  Sparkles,
+  Keyboard,
+  Plus,
+} from "lucide-react";
 
 const SYNC_SERVER_URL = "http://localhost:4000";
 const DEFAULT_ROOM = "default-room";
@@ -66,6 +77,16 @@ export function App() {
     removeFilesFromTabs,
   } = useTabManager({ files });
 
+  const [prevActiveFileId, setPrevActiveFileId] = useState(activeFileId);
+  const [languageOverride, setLanguageOverride] = useState<SupportedLanguage | null>(null);
+
+  if (activeFileId !== prevActiveFileId) {
+    setPrevActiveFileId(activeFileId);
+    setLanguageOverride(null);
+  }
+
+  const effectiveLanguage = languageOverride ?? language;
+
   const activeYText = useMemo(() => {
     if (!workspace || !activeFileId) {
       return ytext;
@@ -76,7 +97,7 @@ export function App() {
   const { isRunning, output, handleRunCode } = useCodeExecution({
     socket,
     activeYText,
-    language,
+    language: effectiveLanguage,
     workspace,
     files,
     folders,
@@ -216,13 +237,25 @@ export function App() {
     handleRunCode();
   }, [handleRunCode]);
 
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const isExec = (e.metaKey || e.ctrlKey) && e.key === "Enter";
+      if (isExec) {
+        e.preventDefault();
+        handleRunCodeClick();
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleGlobalKeyDown);
+    };
+  }, [handleRunCodeClick]);
+
   return (
-    <div className="flex h-screen flex-col bg-[var(--color-bg)]">
+    <div className="flex h-screen flex-col bg-black text-zinc-100">
       <HeaderToolbar
-        language={language}
-        onLanguageChange={() => {
-          // Language is now derived from the active file; manual override is display-only
-        }}
+        language={effectiveLanguage}
+        onLanguageChange={setLanguageOverride}
         connected={connected}
         isRunning={isRunning}
         onRunCode={handleRunCodeClick}
@@ -234,19 +267,25 @@ export function App() {
 
       <ResizableLayout
         sidebar={
-          <aside className="w-full h-full border-r border-[var(--color-border)] bg-[var(--color-surface)] p-3 flex flex-col gap-4">
-            <div className="flex flex-col min-h-0">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Explorer
-                </span>
+          <aside className="w-full h-full border-r border-zinc-800/80 bg-[#09090b] p-3 flex flex-col gap-3 select-none">
+            {/* Explorer Section */}
+            <div className="flex flex-col min-h-0 flex-1">
+              <div className="flex items-center justify-between mb-2 px-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                    Explorer
+                  </span>
+                  <span className="rounded-md bg-zinc-900 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 border border-zinc-800">
+                    {files.length}
+                  </span>
+                </div>
                 <div className="flex items-center gap-0.5">
                   <button
                     type="button"
                     title="New File"
                     aria-label="New File"
                     onClick={() => setCreatingItem({ type: "file", parentId: null })}
-                    className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                    className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
                   >
                     <FilePlus className="h-3.5 w-3.5" />
                   </button>
@@ -255,36 +294,47 @@ export function App() {
                     title="New Folder"
                     aria-label="New Folder"
                     onClick={() => setCreatingItem({ type: "folder", parentId: null })}
-                    className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                    className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
                   >
                     <FolderPlus className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
-              <FileTree
-                tree={tree}
-                activeFileId={activeFileId}
-                onSelectFile={handleSelectFile}
-                creatingItem={creatingItem}
-                onRequestCreate={(type, parentId) => setCreatingItem({ type, parentId })}
-                onConfirmCreate={handleConfirmCreate}
-                onCancelCreate={() => setCreatingItem(null)}
-                onDeleteItem={handleDeleteItem}
-                onRenameItem={handleRenameItem}
-                onMoveItem={handleMoveItem}
-              />
+              <div className="flex-1 overflow-y-auto min-h-0">
+                <FileTree
+                  tree={tree}
+                  activeFileId={activeFileId}
+                  onSelectFile={handleSelectFile}
+                  creatingItem={creatingItem}
+                  onRequestCreate={(type, parentId) => setCreatingItem({ type, parentId })}
+                  onConfirmCreate={handleConfirmCreate}
+                  onCancelCreate={() => setCreatingItem(null)}
+                  onDeleteItem={handleDeleteItem}
+                  onRenameItem={handleRenameItem}
+                  onMoveItem={handleMoveItem}
+                />
+              </div>
             </div>
 
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
-                You
-              </p>
+            {/* Collaborator Profile Card */}
+            <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-2.5 shadow-xs">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                  Collaborator
+                </span>
+                <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Live Sync
+                </span>
+              </div>
               <div className="flex items-center gap-2">
-                <span
-                  className="inline-block h-2 w-2 shrink-0 rounded-full"
+                <div
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white shadow-xs ring-1 ring-white/10"
                   style={{ backgroundColor: participant.cursorColor }}
                   aria-hidden="true"
-                />
+                >
+                  {(displayName.trim() || "A")[0]?.toUpperCase()}
+                </div>
                 <input
                   type="text"
                   value={displayName}
@@ -292,7 +342,7 @@ export function App() {
                   maxLength={32}
                   placeholder="Display name"
                   aria-label="Your display name"
-                  className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-slate-200 placeholder-slate-500 focus:border-tessera-500 outline-none"
+                  className="w-full rounded-md border border-zinc-800 bg-black/80 px-2 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:border-zinc-500 outline-none transition-colors"
                 />
               </div>
             </div>
@@ -306,7 +356,7 @@ export function App() {
           </aside>
         }
         editor={
-          <main className="flex-1 flex flex-col h-full overflow-hidden">
+          <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#09090b]">
             <TabBar
               openFiles={openFiles}
               activeFileId={activeFileId}
@@ -321,21 +371,84 @@ export function App() {
                   fileName={activeFileName ?? undefined}
                   ytext={activeYText}
                   awareness={awareness}
-                  language={language}
+                  language={effectiveLanguage}
                   showMinimap={showMinimap}
                   fontSize={fontSize}
                   openFileIds={openFileIds}
+                  onRunCode={handleRunCodeClick}
                 />
               ) : openFiles.length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-500 font-medium bg-[var(--color-bg)]">
-                  <FileCode className="h-10 w-10 text-slate-600 mb-1" />
-                  <p className="text-sm">No files open</p>
-                  <p className="text-xs text-slate-600">Select a file from the explorer to open it</p>
+                <div className="flex h-full w-full flex-col items-center justify-center bg-[#09090b] p-6 text-center select-none overflow-y-auto">
+                  <div className="relative mb-4">
+                    <div className="relative flex h-14 w-14 items-center justify-center rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-100 shadow-md">
+                      <Code2 className="h-7 w-7 text-zinc-200" />
+                    </div>
+                  </div>
+
+                  <h2 className="text-base font-semibold tracking-tight text-white mb-1.5">
+                    Welcome to Tessera Sandbox
+                  </h2>
+                  <p className="text-xs text-zinc-400 max-w-sm mb-6 leading-relaxed">
+                    Collaborative developer sandbox with real-time CRDT sync, Monaco editor, and containerized Docker runtime.
+                  </p>
+
+                  <div className="flex items-center gap-2.5 mb-8">
+                    <button
+                      type="button"
+                      onClick={() => setCreatingItem({ type: "file", parentId: null })}
+                      className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-3.5 py-1.5 text-xs font-semibold text-zinc-950 shadow-xs hover:bg-white transition-all active:scale-95 cursor-pointer border border-white/20"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Create New File
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsAiPanelOpen(true)}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/80 px-3.5 py-1.5 text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all cursor-pointer"
+                    >
+                      <Sparkles className="h-3.5 w-3.5 text-zinc-400" />
+                      Open AI Assistant
+                    </button>
+                  </div>
+
+                  {/* Quick Shortcuts Card */}
+                  <div className="w-full max-w-md rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-3.5 text-left text-xs shadow-xs">
+                    <div className="flex items-center gap-1.5 mb-2.5 text-zinc-400 font-semibold text-[11px] uppercase tracking-wider">
+                      <Keyboard className="h-3.5 w-3.5 text-zinc-500" />
+                      Keyboard Shortcuts
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-zinc-300 text-[11px]">
+                      <div className="flex items-center justify-between p-2 rounded-md bg-black/60 border border-zinc-800/60">
+                        <span className="text-zinc-400">Run Code</span>
+                        <kbd className="font-mono text-[10px] text-zinc-200 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
+                          {getExecutionShortcutText()}
+                        </kbd>
+                      </div>
+                      <div className="flex items-center justify-between p-2 rounded-md bg-black/60 border border-zinc-800/60">
+                        <span className="text-zinc-400">Rename Item</span>
+                        <kbd className="font-mono text-[10px] text-zinc-200 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
+                          F2
+                        </kbd>
+                      </div>
+                      <div className="flex items-center justify-between p-2 rounded-md bg-black/60 border border-zinc-800/60">
+                        <span className="text-zinc-400">Close Tab</span>
+                        <span className="font-mono text-[10px] text-zinc-200 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
+                          Middle Click
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between p-2 rounded-md bg-black/60 border border-zinc-800/60">
+                        <span className="text-zinc-400">Reset Splitter</span>
+                        <span className="font-mono text-[10px] text-zinc-200 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
+                          Double Click
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-500 font-medium bg-[var(--color-bg)]">
-                  <Loader2 className="animate-spin h-8 w-8 text-tessera-400" />
-                  Connecting to collaboration server…
+                <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-[#09090b] text-zinc-400">
+                  <Loader2 className="animate-spin h-7 w-7 text-zinc-400" />
+                  <p className="text-xs font-medium text-zinc-300">Synchronizing workspace CRDTs…</p>
                 </div>
               )}
             </div>
@@ -354,13 +467,15 @@ export function App() {
 
       <SidePanel
         open={isAiPanelOpen}
-        title="AI Chat"
-        description={`Context: ${activeFileName ?? "No file selected"}`}
+        title="AI Assistant"
+        description={`Context: ${activeFileName ?? "No active file selected"}`}
         onClose={() => setIsAiPanelOpen(false)}
       >
-        <div className="rounded border border-dashed border-[var(--color-border)] bg-[var(--color-bg)] p-4 text-sm text-slate-400">
-          Ready for editor context.
-        </div>
+        <AiAssistantPanel
+          activeFileName={activeFileName}
+          activeCode={activeYText?.toString()}
+          language={effectiveLanguage}
+        />
       </SidePanel>
 
       <ConfirmModal

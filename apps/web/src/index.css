@@ -5,40 +5,94 @@
   --font-sans: "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", monospace;
 
-  --color-tessera-50: #f0f4ff;
-  --color-tessera-100: #dbe4ff;
-  --color-tessera-200: #bac8ff;
-  --color-tessera-300: #91a7ff;
-  --color-tessera-400: #748ffc;
-  --color-tessera-500: #5c7cfa;
-  --color-tessera-600: #4c6ef5;
-  --color-tessera-700: #4263eb;
-  --color-tessera-800: #3b5bdb;
-  --color-tessera-900: #364fc7;
-  --color-tessera-950: #1e3a8a;
+  --color-tessera-50: #f4f4f5;
+  --color-tessera-100: #e4e4e7;
+  --color-tessera-200: #d4d4d8;
+  --color-tessera-300: #a1a1aa;
+  --color-tessera-400: #71717a;
+  --color-tessera-500: #52525b;
+  --color-tessera-600: #3f3f46;
+  --color-tessera-700: #27272a;
+  --color-tessera-800: #18181b;
+  --color-tessera-900: #09090b;
+  --color-tessera-950: #000000;
 }
 
 :root {
   line-height: 1.5;
   font-weight: 400;
   color-scheme: dark;
+  accent-color: #ffffff;
 
-  --color-bg: #0f1117;
-  --color-surface: #161822;
-  --color-border: #2a2d3a;
+  --color-bg: #000000;
+  --color-surface: #09090b;
+  --color-surface-elevated: #121214;
+  --color-border: #27272a;
+  --color-border-subtle: rgba(255, 255, 255, 0.08);
+  --color-border-highlight: rgba(255, 255, 255, 0.2);
+
+  /* Modern Web Guidance: scrollbar theming tokens */
+  --scrollbar-thumb: rgba(255, 255, 255, 0.16);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
+  --scrollbar-track: transparent;
+
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
   background-color: var(--color-bg);
-  color: #e2e8f0;
+  color: #ededed;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 #root {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+::selection {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+/* Custom scrollbars across all scrollable regions */
+* {
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
+}
+
+/* WebKit fallback under Modern Web Guidance */
+@supports not (scrollbar-color: auto) {
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 9999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+  }
+  *::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+}
+
+/* Hide scrollbar utility for tab bars while maintaining scrollability */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 button:focus:not(:focus-visible) {

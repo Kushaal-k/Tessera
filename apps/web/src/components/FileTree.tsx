@@ -8,11 +8,13 @@ import {
   FilePlus,
   FolderPlus,
   Trash2,
+  Edit2,
 } from "lucide-react";
 import type {
   WorkspaceNode,
   WorkspaceFileNode,
 } from "@tessera/shared-types";
+import { FileIcon } from "../utils/fileIcons.js";
 
 export interface CreatingItemState {
   readonly type: "file" | "folder";
@@ -37,7 +39,7 @@ function ActionBtn({
   title,
   ariaLabel,
   onClick,
-  hoverColor = "hover:text-amber-400 hover:bg-amber-400/10",
+  hoverColor = "hover:text-zinc-100 hover:bg-zinc-800",
   children,
 }: {
   title: string;
@@ -55,7 +57,7 @@ function ActionBtn({
         e.stopPropagation();
         onClick(e);
       }}
-      className={`rounded p-1 text-slate-400 ${hoverColor} transition-colors`}
+      className={`rounded p-1 text-zinc-400 ${hoverColor} transition-colors`}
     >
       {children}
     </button>
@@ -102,7 +104,7 @@ function RenameInput({
           onCancel();
         }
       }}
-      className="w-full bg-slate-900 border border-tessera-500 rounded px-1.5 py-0.5 text-xs text-white font-mono outline-none shadow-inner"
+      className="w-full bg-zinc-900 border border-zinc-500 rounded px-1.5 py-0.5 text-xs text-white font-mono outline-none shadow-inner"
     />
   );
 }
@@ -161,19 +163,19 @@ function InlineCreationInput({
     <div
       ref={containerRef}
       style={{ paddingLeft: `${depth * 14}px` }}
-      className="relative flex flex-col my-0.5"
+      className="relative flex flex-col my-1"
     >
       <div
-        className={`flex items-center gap-2 px-2 py-1 rounded-md border ${
+        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border shadow-xs transition-all ${
           isDuplicate
-            ? "border-rose-500 bg-rose-950/20"
-            : "border-tessera-500 bg-slate-900"
+            ? "border-rose-500 bg-rose-950/30 ring-1 ring-rose-500/30"
+            : "border-zinc-700 bg-zinc-900 ring-1 ring-zinc-700/50"
         }`}
       >
         {type === "folder" ? (
-          <Folder className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+          <Folder className="h-3.5 w-3.5 shrink-0 text-amber-400" />
         ) : (
-          <FileCode className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+          <FileCode className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
         )}
         <input
           ref={inputRef}
@@ -194,12 +196,16 @@ function InlineCreationInput({
               onCancel();
             }
           }}
-          placeholder={type === "folder" ? "folder name" : "file.ts"}
-          className="w-full bg-transparent text-xs text-white placeholder-slate-500 outline-none font-mono"
+          placeholder={type === "folder" ? "folder name" : "index.ts"}
+          className="w-full bg-transparent text-xs text-zinc-100 placeholder-zinc-500 outline-none font-mono"
         />
+        <div className="flex items-center gap-1 shrink-0 text-[9px] text-zinc-400 select-none">
+          <kbd className="rounded bg-zinc-800 px-1 py-0.5 border border-zinc-700/60 font-mono">↵</kbd>
+          <kbd className="rounded bg-zinc-800 px-1 py-0.5 border border-zinc-700/60 font-mono">esc</kbd>
+        </div>
       </div>
       {isDuplicate && (
-        <div className="mt-1 mb-1 p-1.5 bg-rose-950 border border-rose-800/80 rounded text-[10px] text-rose-200 leading-tight font-sans select-none">
+        <div className="mt-1 p-1.5 bg-rose-950/80 border border-rose-800/80 rounded-md text-[10px] text-rose-200 leading-tight font-sans select-none">
           A {type === "file" ? "file" : "folder"} named '{trimmed}' already exists.
         </div>
       )}
@@ -244,12 +250,6 @@ export function FileTree({
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
   const [isDragOverRoot, setIsDragOverRoot] = useState(false);
-
-  useEffect(() => {
-    if (creatingItem?.parentId) {
-      setExpandedFolderIds((prev) => new Set([...prev, creatingItem.parentId!]));
-    }
-  }, [creatingItem]);
 
   const toggleFolder = useCallback((id: string) => {
     setExpandedFolderIds((prev) => {
@@ -359,7 +359,8 @@ export function FileTree({
     const isBeingDragged = draggedItemId === node.id;
 
     if (node.type === "folder") {
-      const isExpanded = expandedFolderIds.has(node.id);
+      const isExpanded =
+        expandedFolderIds.has(node.id) || creatingItem?.parentId === node.id;
       const isCreatingInside = creatingItem?.parentId === node.id;
       const isTargetHovered = dragOverFolderId === node.id && draggedItemId !== node.id;
 
@@ -379,8 +380,8 @@ export function FileTree({
           <div
             className={`group/row flex items-center justify-between rounded-md py-1 pr-1 transition-colors ${
               isTargetHovered
-                ? "bg-slate-800 ring-1 ring-tessera-500"
-                : "hover:bg-slate-800/60"
+                ? "bg-zinc-800 ring-1 ring-zinc-500"
+                : "hover:bg-zinc-900/80"
             }`}
           >
             <button
@@ -406,17 +407,17 @@ export function FileTree({
                 setRenamingId(node.id);
               }}
               style={{ paddingLeft: `${depth * 14 + 4}px` }}
-              className="flex flex-1 items-center gap-2 py-0.5 text-xs font-mono font-medium text-slate-300 hover:text-white outline-none focus-visible:ring-1 focus-visible:ring-tessera-500/50 cursor-grab active:cursor-grabbing"
+              className="flex flex-1 items-center gap-2 py-0.5 text-xs font-mono font-medium text-zinc-300 hover:text-white outline-none focus-visible:ring-1 focus-visible:ring-zinc-600 cursor-grab active:cursor-grabbing"
             >
               {isExpanded ? (
-                <ChevronDown className="h-3 w-3 shrink-0 text-slate-400" />
+                <ChevronDown className="h-3 w-3 shrink-0 text-zinc-500" />
               ) : (
-                <ChevronRight className="h-3 w-3 shrink-0 text-slate-400" />
+                <ChevronRight className="h-3 w-3 shrink-0 text-zinc-500" />
               )}
               {isExpanded ? (
-                <FolderOpen className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                <FolderOpen className="h-3.5 w-3.5 shrink-0 text-amber-400" />
               ) : (
-                <Folder className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                <Folder className="h-3.5 w-3.5 shrink-0 text-amber-400/90" />
               )}
               {renamingId === node.id ? (
                 <RenameInput
@@ -435,20 +436,34 @@ export function FileTree({
               )}
             </button>
 
-            <div className="opacity-0 group-hover/row:opacity-100 flex items-center gap-0.5 transition-opacity">
+            <div className="opacity-0 group-hover/row:opacity-100 flex items-center gap-0.5 transition-opacity pr-1">
               <ActionBtn
                 title="New File"
                 ariaLabel={`New file in ${node.name}`}
-                onClick={() => onRequestCreate?.("file", node.id)}
+                onClick={() => {
+                  setExpandedFolderIds((prev) => new Set([...prev, node.id]));
+                  onRequestCreate?.("file", node.id);
+                }}
               >
                 <FilePlus className="h-3.5 w-3.5" />
               </ActionBtn>
               <ActionBtn
                 title="New Folder"
                 ariaLabel={`New folder in ${node.name}`}
-                onClick={() => onRequestCreate?.("folder", node.id)}
+                onClick={() => {
+                  setExpandedFolderIds((prev) => new Set([...prev, node.id]));
+                  onRequestCreate?.("folder", node.id);
+                }}
               >
                 <FolderPlus className="h-3.5 w-3.5" />
+              </ActionBtn>
+              <ActionBtn
+                title="Rename Folder"
+                ariaLabel={`Rename ${node.name}`}
+                hoverColor="hover:text-zinc-200 hover:bg-zinc-800"
+                onClick={() => setRenamingId(node.id)}
+              >
+                <Edit2 className="h-3 w-3" />
               </ActionBtn>
               <ActionBtn
                 title="Delete Folder"
@@ -465,7 +480,7 @@ export function FileTree({
             <div className="relative">
               <div
                 style={{ left: `${depth * 14 + 10}px` }}
-                className="pointer-events-none absolute top-0 bottom-0 w-px bg-slate-800/80 group-hover:bg-slate-600 transition-colors"
+                className="pointer-events-none absolute top-0 bottom-0 w-px bg-zinc-800/80 group-hover:bg-zinc-700 transition-colors"
                 aria-hidden="true"
               />
               <ul role="group" className="space-y-0.5">
@@ -507,8 +522,8 @@ export function FileTree({
         <div
           className={`flex items-center justify-between rounded-md py-1 pr-1 transition-colors ${
             isActive
-              ? "bg-slate-800 text-white shadow-sm font-semibold"
-              : "text-slate-300 hover:bg-slate-800/60 hover:text-white"
+              ? "bg-zinc-800/80 text-zinc-100 font-medium shadow-xs"
+              : "text-zinc-400 hover:bg-zinc-900/80 hover:text-zinc-200"
           }`}
         >
           <button
@@ -528,9 +543,9 @@ export function FileTree({
               setRenamingId(node.id);
             }}
             style={{ paddingLeft: `${depth * 14 + (depth > 0 ? 14 : 4)}px` }}
-            className="flex flex-1 items-center gap-2 py-0.5 text-xs font-mono font-medium outline-none focus-visible:ring-1 focus-visible:ring-tessera-500/50 truncate cursor-grab active:cursor-grabbing"
+            className="flex flex-1 items-center gap-2 py-0.5 text-xs font-mono font-medium outline-none focus-visible:ring-1 focus-visible:ring-zinc-600 truncate cursor-grab active:cursor-grabbing"
           >
-            <FileCode className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+            <FileIcon filename={node.name} className="h-3.5 w-3.5 shrink-0" />
             {renamingId === node.id ? (
               <RenameInput
                 initialName={node.name}
@@ -547,7 +562,15 @@ export function FileTree({
             )}
           </button>
 
-          <div className="opacity-0 group-hover/row:opacity-100 flex items-center gap-0.5 transition-opacity">
+          <div className="opacity-0 group-hover/row:opacity-100 flex items-center gap-0.5 transition-opacity pr-1">
+            <ActionBtn
+              title="Rename File"
+              ariaLabel={`Rename ${node.name}`}
+              hoverColor="hover:text-zinc-200 hover:bg-zinc-800"
+              onClick={() => setRenamingId(node.id)}
+            >
+              <Edit2 className="h-3 w-3" />
+            </ActionBtn>
             <ActionBtn
               title="Delete File"
               ariaLabel={`Delete ${node.name}`}
@@ -565,7 +588,19 @@ export function FileTree({
   const isCreatingAtRoot = creatingItem && creatingItem.parentId === null;
 
   if (tree.length === 0 && !isCreatingAtRoot) {
-    return <div className="px-3 py-4 text-center text-xs text-slate-500">No files in workspace</div>;
+    return (
+      <div className="flex flex-col items-center justify-center p-6 text-center text-xs text-zinc-500">
+        <p className="mb-2.5">No files in workspace</p>
+        <button
+          type="button"
+          onClick={() => onRequestCreate?.("file", null)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-medium transition-colors border border-zinc-800 shadow-xs"
+        >
+          <FilePlus className="h-3.5 w-3.5" />
+          Create File
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -575,7 +610,7 @@ export function FileTree({
       onDragLeave={handleRootDragLeave}
       onDrop={handleRootDrop}
       className={`overflow-y-auto pb-2 min-h-full transition-colors ${
-        isDragOverRoot ? "ring-1 ring-inset ring-tessera-500/50 bg-slate-900/30" : ""
+        isDragOverRoot ? "ring-1 ring-inset ring-zinc-600 bg-zinc-900/40" : ""
       } ${className}`}
     >
       <ul role="tree" className="space-y-0.5 pb-1">
