@@ -1,4 +1,11 @@
-export type SupportedLanguage = "typescript" | "python" | "cpp" | "go" | "java" | "rust";
+export type SupportedLanguage =
+  | "typescript"
+  | "javascript"
+  | "python"
+  | "cpp"
+  | "go"
+  | "java"
+  | "rust";
 
 export type ExecutionStatus =
   | "queued"
