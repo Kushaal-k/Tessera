@@ -1,0 +1,41 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to AWS EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Execute remote deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
+          script: |
+            # Ensure Node, npm, and PM2 binaries are in PATH for non-interactive shells
+            export PATH=$PATH:/usr/bin:/usr/local/bin:/home/ubuntu/.nvm/versions/node/$(ls /home/ubuntu/.nvm/versions/node 2>/dev/null | tail -n 1)/bin
+
+            cd /home/ubuntu/tessera
+
+            # Sync code cleanly with remote main
+            git fetch origin main
+            git reset --hard origin/main
+
+            # Install dependencies and compile monorepo
+            npm ci
+            npx turbo run build
+
+            # Restart backend services in PM2
+            pm2 restart ecosystem.config.cjs || pm2 restart all
+
+            # Reload Nginx static routing
+            sudo systemctl reload nginx
+
