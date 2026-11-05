@@ -56,7 +56,7 @@ export function ConfirmModal({
       }}
     >
       <div
-        className={`w-full max-w-sm rounded-xl border border-zinc-800 bg-[#09090b] p-6 shadow-2xl shadow-black ring-1 ring-white/5 ${className}`}
+        className={`w-full max-w-sm rounded-xl border border-white/[0.08] bg-[#09090b] p-6 shadow-2xl shadow-black ring-1 ring-white/5 ${className}`}
       >
         <div className="flex items-start gap-3.5">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400">
@@ -76,7 +76,7 @@ export function ConfirmModal({
             </svg>
           </div>
           <div className="min-w-0 flex-1">
-            <h2 id="confirm-modal-title" className="text-sm font-semibold text-white">
+            <h2 id="confirm-modal-title" className="text-sm font-medium text-white">
               {title}
             </h2>
             {description ? (
@@ -91,7 +91,7 @@ export function ConfirmModal({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-md border border-zinc-800 bg-zinc-900 px-3.5 py-2 text-xs font-medium text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-white focus:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500"
+            className="rounded-md border border-white/[0.08] bg-zinc-900 px-3.5 py-2 text-xs font-medium text-zinc-300 transition-colors duration-150 hover:bg-zinc-800 hover:text-white focus:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500"
           >
             {cancelLabel}
           </button>
@@ -99,7 +99,7 @@ export function ConfirmModal({
             type="button"
             autoFocus
             onClick={onConfirm}
-            className="rounded-md bg-rose-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition-all hover:bg-rose-500 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/50"
+            className="rounded-md bg-rose-600 px-3.5 py-2 text-xs font-medium text-white transition-colors duration-150 hover:bg-rose-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/50"
           >
             {confirmLabel}
           </button>

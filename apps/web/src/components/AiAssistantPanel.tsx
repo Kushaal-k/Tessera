@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, type FormEvent, type ReactNode } from "react";
 import {
-  Sparkles,
   Send,
   Bot,
   User,
@@ -335,19 +334,19 @@ export function AiAssistantPanel({
   return (
     <div className="flex flex-col h-full w-full text-zinc-200">
       {/* Active Context Banner */}
-      <div className="mb-4 flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/60 p-2.5 shadow-xs">
+      <div className="mb-4 flex items-center justify-between rounded-lg border border-white/[0.08] bg-zinc-900/50 p-2.5">
         <div className="flex items-center gap-2 min-w-0">
           {activeFileName ? (
             <FileIcon filename={activeFileName} className="h-4 w-4 shrink-0" />
           ) : (
-            <Sparkles className="h-4 w-4 text-zinc-400 shrink-0" />
+            <Bot className="h-4 w-4 text-zinc-400 shrink-0" />
           )}
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-xs font-semibold text-white truncate">
+              <span className="text-xs font-medium text-white truncate">
                 {activeFileName ?? "No active file"}
               </span>
-              <span className="rounded bg-zinc-800/80 px-1.5 py-0.5 text-[9px] font-mono text-zinc-400 uppercase border border-zinc-800">
+              <span className="rounded bg-zinc-800/80 px-1.5 py-0.5 text-[9px] font-mono text-zinc-400 border border-white/[0.08]">
                 {language}
               </span>
             </div>
@@ -358,22 +357,22 @@ export function AiAssistantPanel({
         </div>
 
         {/* AI Health Status Badge */}
-        <div className="flex items-center gap-1.5 shrink-0 px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-[10px]">
+        <div className="flex items-center gap-1.5 shrink-0 px-2 py-0.5 rounded-full bg-zinc-900 border border-white/[0.08] text-[10px]">
           <span
             className={`h-1.5 w-1.5 rounded-full ${
-              isAiOnline ? "bg-emerald-400" : isAiOnline === false ? "bg-amber-400" : "bg-zinc-500 animate-pulse"
+              isAiOnline ? "bg-emerald-400" : isAiOnline === false ? "bg-amber-400" : "bg-zinc-500"
             }`}
           />
           <span className="text-zinc-300 font-medium">
-            {isAiOnline ? "Engine Online" : isAiOnline === false ? "Local Assist" : "Probing..."}
+            {isAiOnline ? "Engine online" : isAiOnline === false ? "Local assist" : "Checking"}
           </span>
         </div>
       </div>
 
       {/* Quick Action Suggestion Chips */}
       <div className="mb-4">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-1.5">
-          Quick Prompts
+        <p className="text-xs font-medium text-zinc-400 mb-1.5">
+          Quick prompts
         </p>
         <div className="grid grid-cols-2 gap-1.5">
           {QUICK_ACTIONS.map((action) => {
@@ -382,10 +381,12 @@ export function AiAssistantPanel({
               <button
                 key={action.label}
                 type="button"
-                onClick={() => handleSendPrompt(action.prompt)}
-                className="flex items-center gap-2 rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-2 text-left text-xs text-zinc-300 transition-all hover:border-zinc-700 hover:bg-zinc-800 hover:text-white group cursor-pointer"
+                onClick={() => {
+                  handleSendPrompt(action.prompt);
+                }}
+                className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-zinc-900/40 p-2 text-left text-xs text-zinc-300 transition-colors duration-150 hover:border-white/[0.16] hover:bg-zinc-800 hover:text-white cursor-pointer"
               >
-                <Icon className="h-3.5 w-3.5 text-zinc-400 shrink-0 transition-transform group-hover:scale-110 group-hover:text-zinc-200" />
+                <Icon className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
                 <span className="font-medium text-[11px] truncate">{action.label}</span>
               </button>
             );
@@ -405,18 +406,18 @@ export function AiAssistantPanel({
               <div
                 className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
                   isUser
-                    ? "bg-zinc-100 text-black shadow-xs"
-                    : "bg-zinc-900 text-zinc-300 border border-zinc-800"
+                    ? "bg-zinc-100 text-black"
+                    : "bg-zinc-900 text-zinc-300 border border-white/[0.08]"
                 }`}
               >
                 {isUser ? <User className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
               </div>
 
               <div
-                className={`relative max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${
+                className={`relative max-w-[85%] rounded-xl px-3.5 py-2.5 text-xs leading-relaxed ${
                   isUser
-                    ? "bg-zinc-100 text-zinc-950 rounded-tr-xs font-normal"
-                    : "bg-zinc-900/90 text-zinc-200 border border-zinc-800 rounded-tl-xs shadow-xs"
+                    ? "bg-zinc-100 text-zinc-950 font-normal"
+                    : "bg-zinc-900/80 text-zinc-200 border border-white/[0.08]"
                 }`}
               >
                 {isUser ? (
@@ -428,7 +429,9 @@ export function AiAssistantPanel({
                 {!isUser && (
                   <button
                     type="button"
-                    onClick={() => handleCopyText(msg.id, msg.text)}
+                    onClick={() => {
+                      void handleCopyText(msg.id, msg.text);
+                    }}
                     title="Copy response"
                     aria-label="Copy response"
                     className="absolute top-2 right-2 p-1 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
@@ -448,21 +451,23 @@ export function AiAssistantPanel({
       </div>
 
       {/* Prompt Input Form */}
-      <form onSubmit={handleSubmit} className="mt-auto pt-3 border-t border-zinc-800/80">
+      <form onSubmit={handleSubmit} className="mt-auto pt-3 border-t border-white/[0.08]">
         <div className="relative flex items-center">
           <input
             type="text"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+            }}
             placeholder={`Ask about ${activeFileName ?? "code"}...`}
-            className="w-full rounded-lg border border-zinc-800 bg-zinc-900/80 px-3.5 py-2.5 pr-10 text-xs text-zinc-100 placeholder-zinc-500 outline-none focus:border-zinc-500 transition-colors shadow-inner"
+            className="w-full rounded-lg border border-white/[0.08] bg-zinc-900/80 px-3.5 py-2.5 pr-10 text-xs text-zinc-100 placeholder-zinc-500 outline-none focus:border-white/[0.2] transition-colors"
           />
           <button
             type="submit"
             disabled={!input.trim()}
             title="Send prompt"
             aria-label="Send prompt"
-            className="absolute right-1.5 flex h-7 w-7 items-center justify-center rounded-md bg-zinc-100 text-zinc-950 transition-all hover:bg-white disabled:opacity-30 disabled:hover:bg-zinc-100 active:scale-95 cursor-pointer disabled:cursor-not-allowed"
+            className="absolute right-1.5 flex h-7 w-7 items-center justify-center rounded-md bg-zinc-100 text-zinc-950 transition-colors duration-150 hover:bg-white disabled:opacity-30 disabled:hover:bg-zinc-100 cursor-pointer disabled:cursor-not-allowed"
           >
             <Send className="h-3.5 w-3.5" />
           </button>

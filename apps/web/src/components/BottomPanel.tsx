@@ -64,17 +64,17 @@ export function BottomPanel({
   };
 
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden bg-black border-t border-zinc-800/80">
+    <div className="flex flex-col h-full w-full overflow-hidden bg-[#09090b] border-t border-white/[0.08]">
       {/* Dock Tabs Header */}
-      <div className="flex h-9 items-center justify-between px-3 bg-black border-b border-zinc-800/80 select-none">
+      <div className="flex h-9 items-center justify-between px-3 bg-[#09090b] border-b border-white/[0.08] select-none">
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => handleSelectTab("terminal")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors duration-150 ${
               activeTab === "terminal"
-                ? "bg-zinc-900 text-zinc-100 border border-zinc-800 shadow-xs"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50"
+                ? "bg-zinc-900 text-zinc-100 border border-white/[0.08]"
+                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40"
             }`}
           >
             <TerminalIcon className="h-3.5 w-3.5 text-zinc-400" />
@@ -84,46 +84,43 @@ export function BottomPanel({
           <button
             type="button"
             onClick={() => handleSelectTab("output")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors duration-150 ${
               activeTab === "output"
-                ? "bg-zinc-900 text-zinc-100 border border-zinc-800 shadow-xs"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50"
+                ? "bg-zinc-900 text-zinc-100 border border-white/[0.08]"
+                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40"
             }`}
           >
             <Play className="h-3.5 w-3.5 text-zinc-400" />
-            <span>Execution Output</span>
+            <span>Execution output</span>
             {isRunning && (
-              <span className="relative flex h-2 w-2 ml-0.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
-              </span>
+              <span className="flex h-1.5 w-1.5 rounded-full bg-amber-400 ml-0.5" />
             )}
           </button>
 
           <button
             type="button"
             onClick={() => handleSelectTab("preview")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors duration-150 ${
               activeTab === "preview"
-                ? "bg-zinc-900 text-zinc-100 border border-zinc-800 shadow-xs"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50"
+                ? "bg-zinc-900 text-zinc-100 border border-white/[0.08]"
+                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40"
             }`}
           >
             <Globe className="h-3.5 w-3.5 text-zinc-400" />
-            <span>Web Preview</span>
+            <span>Web preview</span>
           </button>
         </div>
 
         {/* Output tab header metadata and quick actions */}
         {activeTab === "output" && output && (
           <div className="flex items-center gap-2.5 text-xs font-mono">
-            <div className="flex items-center gap-1 text-zinc-400 text-[11px]">
+            <div className="flex items-center gap-1 text-zinc-400 text-[11px] tabular-nums">
               <Clock className="h-3 w-3 text-zinc-500" />
               <span>{output.durationMs}ms</span>
             </div>
             {output.exitCode !== null && (
               <span
-                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono ${
                   output.exitCode === 0
                     ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                     : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
@@ -171,11 +168,11 @@ export function BottomPanel({
             activeTab === "output" ? "block" : "hidden"
           }`}
         >
-          <div className="flex-1 overflow-y-auto font-mono text-xs p-3 rounded-lg bg-black border border-zinc-800/80 shadow-inner">
+          <div className="flex-1 overflow-y-auto font-mono text-xs p-3 rounded-lg bg-black/60 border border-white/[0.08]">
             {isRunning ? (
-              <div className="flex items-center gap-2.5 text-zinc-400 animate-pulse py-2">
+              <div className="flex items-center gap-2.5 text-zinc-400 py-2">
                 <TerminalSquare className="h-4 w-4" />
-                <span>Running batch execution sandbox...</span>
+                <span>Running batch execution in sandbox...</span>
               </div>
             ) : output ? (
               <div className="space-y-1.5 whitespace-pre-wrap leading-relaxed">
@@ -187,16 +184,16 @@ export function BottomPanel({
                 )}
                 {!output.stdout && !output.stderr && (
                   <div className="text-zinc-500 italic">
-                    No output returned (Process completed with exit code {output.exitCode}).
+                    No output returned (process completed with exit code {output.exitCode}).
                   </div>
                 )}
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-zinc-500 py-6">
                 <TerminalSquare className="h-6 w-6 text-zinc-600 mb-1.5" />
-                <p className="text-xs text-zinc-400 font-sans">Ready to execute code.</p>
-                <p className="text-[11px] text-zinc-600 font-sans mt-0.5">
-                  Click <span className="font-semibold text-zinc-300">Run</span> in toolbar or press <kbd className="px-1 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-300 font-mono text-[10px]">{getExecutionShortcutText()}</kbd>
+                <p className="text-xs text-zinc-400 font-sans">Ready to execute code</p>
+                <p className="text-[11px] text-zinc-500 font-sans mt-0.5">
+                  Click <span className="font-medium text-zinc-300">Run</span> in toolbar or press <kbd className="px-1.5 py-0.5 rounded bg-zinc-900 border border-white/[0.08] text-zinc-300 font-mono text-[10px]">{getExecutionShortcutText()}</kbd>
                 </p>
               </div>
             )}
