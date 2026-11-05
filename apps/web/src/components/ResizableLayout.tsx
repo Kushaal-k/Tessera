@@ -198,12 +198,12 @@ export function ResizableLayout({
           tabIndex={0}
           onMouseDown={handleSidebarMouseDown}
           onDoubleClick={resetSidebarWidth}
-          className={`group w-1.5 shrink-0 bg-transparent hover:bg-zinc-800/80 cursor-col-resize transition-all relative z-20 flex items-center justify-center ${
-            isDraggingSidebar ? "bg-zinc-700" : ""
+          className={`group w-1.5 shrink-0 bg-transparent hover:bg-zinc-800/60 cursor-col-resize transition-colors duration-150 relative z-20 flex items-center justify-center ${
+            isDraggingSidebar ? "bg-zinc-800" : ""
           }`}
           data-testid="sidebar-resizer"
         >
-          <div className="w-0.5 h-6 rounded-full bg-zinc-600 group-hover:bg-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="w-0.5 h-6 rounded-full bg-zinc-700 group-hover:bg-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
         </div>
 
         {/* Editor Container */}
@@ -221,12 +221,12 @@ export function ResizableLayout({
         tabIndex={0}
         onMouseDown={handleBottomMouseDown}
         onDoubleClick={resetBottomHeight}
-        className={`group h-1.5 shrink-0 bg-transparent hover:bg-zinc-800/80 cursor-row-resize transition-all relative z-20 flex items-center justify-center ${
-          isDraggingBottom ? "bg-zinc-700" : ""
+        className={`group h-1.5 shrink-0 bg-transparent hover:bg-zinc-800/60 cursor-row-resize transition-colors duration-150 relative z-20 flex items-center justify-center ${
+          isDraggingBottom ? "bg-zinc-800" : ""
         }`}
         data-testid="bottom-resizer"
       >
-        <div className="h-0.5 w-8 rounded-full bg-zinc-600 group-hover:bg-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+        <div className="h-0.5 w-8 rounded-full bg-zinc-700 group-hover:bg-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
       </div>
 
       {/* Bottom Panel Container */}

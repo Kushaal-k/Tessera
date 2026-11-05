@@ -34,7 +34,7 @@ export function TabBar({
     <div
       role="tablist"
       aria-label="Open Files"
-      className="flex h-9 w-full items-center overflow-x-auto border-b border-zinc-800/80 bg-black text-xs select-none no-scrollbar z-10"
+      className="flex h-9 w-full items-center overflow-x-auto border-b border-white/[0.08] bg-[#09090b] text-xs select-none no-scrollbar z-10"
     >
       {openFiles.map((file) => {
         const isActive = file.id === activeFileId;
@@ -44,18 +44,22 @@ export function TabBar({
             role="tab"
             aria-selected={isActive}
             tabIndex={0}
-            onClick={() => onSelectTab(file.id)}
-            onAuxClick={(e) => handleAuxClick(e, file.id)}
+            onClick={() => {
+              onSelectTab(file.id);
+            }}
+            onAuxClick={(e) => {
+              handleAuxClick(e, file.id);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
                 onSelectTab(file.id);
               }
             }}
-            className={`group relative flex h-full items-center gap-2 border-r border-zinc-800/80 px-3 cursor-pointer transition-colors ${
+            className={`group relative flex h-full items-center gap-2 border-r border-white/[0.08] px-3 cursor-pointer transition-colors ${
               isActive
-                ? "bg-[#09090b] text-zinc-100 font-medium border-t-2 border-t-zinc-200 shadow-xs"
-                : "text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-200 border-t-2 border-t-transparent"
+                ? "bg-zinc-900/60 text-zinc-100 font-medium border-t border-t-zinc-200/40"
+                : "text-zinc-400 hover:bg-zinc-900/40 hover:text-zinc-200 border-t border-t-transparent"
             }`}
           >
             <FileIcon filename={file.name} className="h-3.5 w-3.5 shrink-0" />
@@ -68,7 +72,7 @@ export function TabBar({
                 e.stopPropagation();
                 onCloseTab(file.id);
               }}
-              className={`ml-1 rounded p-0.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 transition-all focus:opacity-100 ${
+              className={`ml-1 rounded p-0.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 transition-colors duration-150 focus:opacity-100 ${
                 isActive ? "opacity-70 hover:opacity-100" : "opacity-0 group-hover:opacity-100"
               }`}
             >

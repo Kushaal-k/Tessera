@@ -57,7 +57,7 @@ function ActionBtn({
         e.stopPropagation();
         onClick(e);
       }}
-      className={`rounded p-1 text-zinc-400 ${hoverColor} transition-colors`}
+      className={`rounded p-1 text-zinc-400 ${hoverColor} transition-colors duration-150`}
     >
       {children}
     </button>
@@ -104,7 +104,7 @@ function RenameInput({
           onCancel();
         }
       }}
-      className="w-full bg-zinc-900 border border-zinc-500 rounded px-1.5 py-0.5 text-xs text-white font-mono outline-none shadow-inner"
+      className="w-full bg-zinc-900 border border-white/[0.16] rounded px-1.5 py-0.5 text-xs text-white font-mono outline-none"
     />
   );
 }
@@ -166,10 +166,10 @@ function InlineCreationInput({
       className="relative flex flex-col my-1"
     >
       <div
-        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border shadow-xs transition-all ${
+        className={`flex items-center gap-2 px-2 py-1 rounded-md border transition-colors ${
           isDuplicate
-            ? "border-rose-500 bg-rose-950/30 ring-1 ring-rose-500/30"
-            : "border-zinc-700 bg-zinc-900 ring-1 ring-zinc-700/50"
+            ? "border-rose-500/80 bg-rose-950/30 ring-1 ring-rose-500/20"
+            : "border-white/[0.16] bg-zinc-900"
         }`}
       >
         {type === "folder" ? (
@@ -200,13 +200,13 @@ function InlineCreationInput({
           className="w-full bg-transparent text-xs text-zinc-100 placeholder-zinc-500 outline-none font-mono"
         />
         <div className="flex items-center gap-1 shrink-0 text-[9px] text-zinc-400 select-none">
-          <kbd className="rounded bg-zinc-800 px-1 py-0.5 border border-zinc-700/60 font-mono">↵</kbd>
-          <kbd className="rounded bg-zinc-800 px-1 py-0.5 border border-zinc-700/60 font-mono">esc</kbd>
+          <kbd className="rounded bg-zinc-800 px-1 py-0.5 border border-white/[0.08] font-mono">↵</kbd>
+          <kbd className="rounded bg-zinc-800 px-1 py-0.5 border border-white/[0.08] font-mono">esc</kbd>
         </div>
       </div>
       {isDuplicate && (
-        <div className="mt-1 p-1.5 bg-rose-950/80 border border-rose-800/80 rounded-md text-[10px] text-rose-200 leading-tight font-sans select-none">
-          A {type === "file" ? "file" : "folder"} named '{trimmed}' already exists.
+        <div className="mt-1 p-1.5 bg-rose-950/60 border border-rose-800/60 rounded text-[10px] text-rose-200 leading-tight font-sans select-none">
+          A {type === "file" ? "file" : "folder"} named '{trimmed}' already exists
         </div>
       )}
     </div>
@@ -378,10 +378,10 @@ export function FileTree({
           className={`group select-none ${isBeingDragged ? "opacity-40" : ""}`}
         >
           <div
-            className={`group/row flex items-center justify-between rounded-md py-1 pr-1 transition-colors ${
+            className={`group/row flex items-center justify-between rounded-md py-1 pr-1 transition-colors duration-150 ${
               isTargetHovered
                 ? "bg-zinc-800 ring-1 ring-zinc-500"
-                : "hover:bg-zinc-900/80"
+                : "hover:bg-zinc-900/60"
             }`}
           >
             <button
@@ -520,10 +520,10 @@ export function FileTree({
         className={`group/row select-none ${isBeingDragged ? "opacity-40" : ""}`}
       >
         <div
-          className={`flex items-center justify-between rounded-md py-1 pr-1 transition-colors ${
+          className={`flex items-center justify-between rounded-md py-1 pr-1 transition-colors duration-150 ${
             isActive
-              ? "bg-zinc-800/80 text-zinc-100 font-medium shadow-xs"
-              : "text-zinc-400 hover:bg-zinc-900/80 hover:text-zinc-200"
+              ? "bg-zinc-900 text-zinc-100 font-medium border border-white/[0.06]"
+              : "text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-200 border border-transparent"
           }`}
         >
           <button
@@ -594,10 +594,10 @@ export function FileTree({
         <button
           type="button"
           onClick={() => onRequestCreate?.("file", null)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-medium transition-colors border border-zinc-800 shadow-xs"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-medium transition-colors duration-150 border border-white/[0.08]"
         >
           <FilePlus className="h-3.5 w-3.5" />
-          Create File
+          Create file
         </button>
       </div>
     );

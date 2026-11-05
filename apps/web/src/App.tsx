@@ -30,7 +30,7 @@ import {
   FolderPlus,
   Loader2,
   Code2,
-  Sparkles,
+  Bot,
   Keyboard,
   Plus,
 } from "lucide-react";
@@ -269,15 +269,15 @@ export function App() {
 
       <ResizableLayout
         sidebar={
-          <aside className="w-full h-full border-r border-zinc-800/80 bg-[#09090b] p-3 flex flex-col gap-3 select-none">
+          <aside className="w-full h-full border-r border-white/[0.08] bg-[#09090b] p-3 flex flex-col gap-3 select-none">
             {/* Explorer Section */}
             <div className="flex flex-col min-h-0 flex-1">
               <div className="flex items-center justify-between mb-2 px-1">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                  <span className="text-xs font-medium text-zinc-400">
                     Explorer
                   </span>
-                  <span className="rounded-md bg-zinc-900 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 border border-zinc-800">
+                  <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] font-mono text-zinc-500 border border-white/[0.08]">
                     {files.length}
                   </span>
                 </div>
@@ -286,7 +286,9 @@ export function App() {
                     type="button"
                     title="New File"
                     aria-label="New File"
-                    onClick={() => setCreatingItem({ type: "file", parentId: null })}
+                    onClick={() => {
+                      setCreatingItem({ type: "file", parentId: null });
+                    }}
                     className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
                   >
                     <FilePlus className="h-3.5 w-3.5" />
@@ -295,7 +297,9 @@ export function App() {
                     type="button"
                     title="New Folder"
                     aria-label="New Folder"
-                    onClick={() => setCreatingItem({ type: "folder", parentId: null })}
+                    onClick={() => {
+                      setCreatingItem({ type: "folder", parentId: null });
+                    }}
                     className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
                   >
                     <FolderPlus className="h-3.5 w-3.5" />
@@ -308,9 +312,13 @@ export function App() {
                   activeFileId={activeFileId}
                   onSelectFile={handleSelectFile}
                   creatingItem={creatingItem}
-                  onRequestCreate={(type, parentId) => setCreatingItem({ type, parentId })}
+                  onRequestCreate={(type, parentId) => {
+                    setCreatingItem({ type, parentId });
+                  }}
                   onConfirmCreate={handleConfirmCreate}
-                  onCancelCreate={() => setCreatingItem(null)}
+                  onCancelCreate={() => {
+                    setCreatingItem(null);
+                  }}
                   onDeleteItem={handleDeleteItem}
                   onRenameItem={handleRenameItem}
                   onMoveItem={handleMoveItem}
@@ -319,19 +327,19 @@ export function App() {
             </div>
 
             {/* Collaborator Profile Card */}
-            <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-2.5 shadow-xs">
+            <div className="rounded-lg border border-white/[0.08] bg-zinc-900/50 p-2.5">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                <span className="text-xs font-medium text-zinc-400">
                   Collaborator
                 </span>
                 <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                   Live Sync
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <div
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white shadow-xs ring-1 ring-white/10"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ring-1 ring-white/10"
                   style={{ backgroundColor: participant.cursorColor }}
                   aria-hidden="true"
                 >
@@ -340,11 +348,13 @@ export function App() {
                 <input
                   type="text"
                   value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
+                  onChange={(e) => {
+                    setDisplayName(e.target.value);
+                  }}
                   maxLength={32}
                   placeholder="Display name"
                   aria-label="Your display name"
-                  className="w-full rounded-md border border-zinc-800 bg-black/80 px-2 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:border-zinc-500 outline-none transition-colors"
+                  className="w-full rounded-md border border-white/[0.08] bg-black/60 px-2 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:border-white/[0.2] outline-none transition-colors"
                 />
               </div>
             </div>
@@ -382,66 +392,70 @@ export function App() {
               ) : openFiles.length === 0 ? (
                 <div className="flex h-full w-full flex-col items-center justify-center bg-[#09090b] p-6 text-center select-none overflow-y-auto">
                   <div className="relative mb-4">
-                    <div className="relative flex h-14 w-14 items-center justify-center rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-100 shadow-md">
-                      <Code2 className="h-7 w-7 text-zinc-200" />
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-900 border border-white/[0.08] text-zinc-200">
+                      <Code2 className="h-6 w-6 text-zinc-300" />
                     </div>
                   </div>
 
-                  <h2 className="text-base font-semibold tracking-tight text-white mb-1.5">
+                  <h2 className="text-sm font-medium tracking-tight text-white mb-1.5">
                     Welcome to Tessera Sandbox
                   </h2>
                   <p className="text-xs text-zinc-400 max-w-sm mb-6 leading-relaxed">
                     Collaborative developer sandbox with real-time CRDT sync, Monaco editor, and containerized Docker runtime.
                   </p>
 
-                  <div className="flex items-center gap-2.5 mb-8">
+                  <div className="flex items-center gap-2 mb-8">
                     <button
                       type="button"
-                      onClick={() => setCreatingItem({ type: "file", parentId: null })}
-                      className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-3.5 py-1.5 text-xs font-semibold text-zinc-950 shadow-xs hover:bg-white transition-all active:scale-95 cursor-pointer border border-white/20"
+                      onClick={() => {
+                        setCreatingItem({ type: "file", parentId: null });
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-3.5 py-1.5 text-xs font-medium text-zinc-950 hover:bg-white transition-colors duration-150 cursor-pointer border border-white/20"
                     >
                       <Plus className="h-3.5 w-3.5" />
-                      Create New File
+                      Create file
                     </button>
                     <button
                       type="button"
-                      onClick={() => setIsAiPanelOpen(true)}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/80 px-3.5 py-1.5 text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all cursor-pointer"
+                      onClick={() => {
+                        setIsAiPanelOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-zinc-900/80 px-3.5 py-1.5 text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800 hover:border-white/[0.16] transition-colors duration-150 cursor-pointer"
                     >
-                      <Sparkles className="h-3.5 w-3.5 text-zinc-400" />
-                      Open AI Assistant
+                      <Bot className="h-3.5 w-3.5 text-zinc-400" />
+                      AI assistant
                     </button>
                   </div>
 
                   {/* Quick Shortcuts Card */}
-                  <div className="w-full max-w-md rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-3.5 text-left text-xs shadow-xs">
-                    <div className="flex items-center gap-1.5 mb-2.5 text-zinc-400 font-semibold text-[11px] uppercase tracking-wider">
+                  <div className="w-full max-w-md rounded-lg border border-white/[0.08] bg-zinc-900/40 p-3.5 text-left text-xs">
+                    <div className="flex items-center gap-1.5 mb-2.5 text-zinc-400 font-medium text-xs">
                       <Keyboard className="h-3.5 w-3.5 text-zinc-500" />
-                      Keyboard Shortcuts
+                      Keyboard shortcuts
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-zinc-300 text-[11px]">
-                      <div className="flex items-center justify-between p-2 rounded-md bg-black/60 border border-zinc-800/60">
-                        <span className="text-zinc-400">Run Code</span>
-                        <kbd className="font-mono text-[10px] text-zinc-200 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
+                      <div className="flex items-center justify-between p-2 rounded-md bg-black/40 border border-white/[0.06]">
+                        <span className="text-zinc-400">Run code</span>
+                        <kbd className="font-mono text-[10px] text-zinc-300 bg-zinc-900 px-1.5 py-0.5 rounded border border-white/[0.08]">
                           {getExecutionShortcutText()}
                         </kbd>
                       </div>
-                      <div className="flex items-center justify-between p-2 rounded-md bg-black/60 border border-zinc-800/60">
-                        <span className="text-zinc-400">Rename Item</span>
-                        <kbd className="font-mono text-[10px] text-zinc-200 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
+                      <div className="flex items-center justify-between p-2 rounded-md bg-black/40 border border-white/[0.06]">
+                        <span className="text-zinc-400">Rename item</span>
+                        <kbd className="font-mono text-[10px] text-zinc-300 bg-zinc-900 px-1.5 py-0.5 rounded border border-white/[0.08]">
                           F2
                         </kbd>
                       </div>
-                      <div className="flex items-center justify-between p-2 rounded-md bg-black/60 border border-zinc-800/60">
-                        <span className="text-zinc-400">Close Tab</span>
-                        <span className="font-mono text-[10px] text-zinc-200 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
-                          Middle Click
+                      <div className="flex items-center justify-between p-2 rounded-md bg-black/40 border border-white/[0.06]">
+                        <span className="text-zinc-400">Close tab</span>
+                        <span className="font-mono text-[10px] text-zinc-300 bg-zinc-900 px-1.5 py-0.5 rounded border border-white/[0.08]">
+                          Middle click
                         </span>
                       </div>
-                      <div className="flex items-center justify-between p-2 rounded-md bg-black/60 border border-zinc-800/60">
-                        <span className="text-zinc-400">Reset Splitter</span>
-                        <span className="font-mono text-[10px] text-zinc-200 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
-                          Double Click
+                      <div className="flex items-center justify-between p-2 rounded-md bg-black/40 border border-white/[0.06]">
+                        <span className="text-zinc-400">Reset splitter</span>
+                        <span className="font-mono text-[10px] text-zinc-300 bg-zinc-900 px-1.5 py-0.5 rounded border border-white/[0.08]">
+                          Double click
                         </span>
                       </div>
                     </div>
