@@ -35,7 +35,9 @@ import {
   Plus,
 } from "lucide-react";
 
-const SYNC_SERVER_URL = "http://localhost:4000";
+const SYNC_SERVER_URL =
+  import.meta.env.VITE_SYNC_SERVER_URL ??
+  (typeof window !== "undefined" ? window.location.origin : "http://localhost:4000");
 const DEFAULT_ROOM = "default-room";
 
 export function App() {
