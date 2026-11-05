@@ -10,27 +10,27 @@ export interface TerminalProps {
 }
 
 export const TESSERA_TERMINAL_THEME = {
-  background: "#0f172a", // slate-900 matching Tessera background
-  foreground: "#e2e8f0", // slate-200
-  cursor: "#38bdf8",     // sky-400 primary accent
-  cursorAccent: "#0f172a",
-  selectionBackground: "#334155", // slate-700
+  background: "#000000",
+  foreground: "#f4f4f5",
+  cursor: "#ffffff",
+  cursorAccent: "#000000",
+  selectionBackground: "#27272a",
   selectionForeground: "#ffffff",
-  black: "#0f172a",
+  black: "#000000",
   red: "#f87171",
   green: "#4ade80",
   yellow: "#facc15",
-  blue: "#38bdf8",
+  blue: "#60a5fa",
   magenta: "#c084fc",
-  cyan: "#22d3ee",
-  white: "#f8fafc",
-  brightBlack: "#475569",
+  cyan: "#38bdf8",
+  white: "#f4f4f5",
+  brightBlack: "#52525b",
   brightRed: "#ef4444",
   brightGreen: "#22c55e",
   brightYellow: "#eab308",
-  brightBlue: "#0ea5e9",
+  brightBlue: "#3b82f6",
   brightMagenta: "#a855f7",
-  brightCyan: "#06b6d4",
+  brightCyan: "#0ea5e9",
   brightWhite: "#ffffff",
 };
 
@@ -51,24 +51,33 @@ export function Terminal({ roomId, className, serverUrl }: TerminalProps) {
 
   return (
     <div
-      className={`relative flex flex-col h-full w-full overflow-hidden bg-[#0f172a] ${
+      className={`relative flex flex-col h-full w-full overflow-hidden bg-black ${
         className ?? ""
       }`}
       data-status={status}
     >
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-border,#1e293b)] bg-[var(--color-surface,#0b1120)] text-xs">
+      <div className="flex h-8 items-center justify-between px-3 border-b border-zinc-800/80 bg-black text-xs">
         <div className="flex items-center gap-2">
-          <TerminalIcon className="h-3.5 w-3.5 text-slate-400" />
-          <span className="font-semibold text-slate-300">Terminal</span>
+          <TerminalIcon className="h-3.5 w-3.5 text-zinc-400" />
+          <span className="text-[11px] font-mono text-zinc-400 font-medium">bash (pty)</span>
           <span
-            className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium font-mono ${
               status === "connected"
-                ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/40"
+                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                 : status === "connecting"
-                ? "bg-amber-950/60 text-amber-400 border border-amber-800/40 animate-pulse"
-                : "bg-rose-950/60 text-rose-400 border border-rose-800/40"
+                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
             }`}
           >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                status === "connected"
+                  ? "bg-emerald-400"
+                  : status === "connecting"
+                  ? "bg-amber-400 animate-ping"
+                  : "bg-rose-400"
+              }`}
+            />
             {status}
           </span>
         </div>
@@ -79,7 +88,7 @@ export function Terminal({ roomId, className, serverUrl }: TerminalProps) {
             onClick={() => { void handleCopy(); }}
             title={copied ? "Copied!" : "Copy Output"}
             aria-label={copied ? "Copied!" : "Copy Output"}
-            className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+            className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
           >
             {copied ? (
               <Check className="h-3.5 w-3.5 text-emerald-400" />
@@ -92,7 +101,7 @@ export function Terminal({ roomId, className, serverUrl }: TerminalProps) {
             onClick={clearBuffer}
             title="Clear Buffer"
             aria-label="Clear Buffer"
-            className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+            className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>
@@ -101,7 +110,7 @@ export function Terminal({ roomId, className, serverUrl }: TerminalProps) {
             onClick={restartTerminal}
             title="Restart Terminal"
             aria-label="Restart Terminal"
-            className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+            className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
           >
             <RotateCcw className="h-3.5 w-3.5" />
           </button>

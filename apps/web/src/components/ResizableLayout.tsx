@@ -194,14 +194,17 @@ export function ResizableLayout({
           role="separator"
           aria-orientation="vertical"
           aria-label="Resize sidebar"
+          title="Drag to resize sidebar, double-click to reset"
           tabIndex={0}
           onMouseDown={handleSidebarMouseDown}
           onDoubleClick={resetSidebarWidth}
-          className={`w-1.5 shrink-0 bg-transparent hover:bg-sky-500/50 cursor-col-resize transition-colors relative z-10 ${
-            isDraggingSidebar ? "bg-sky-500" : ""
+          className={`group w-1.5 shrink-0 bg-transparent hover:bg-zinc-800/80 cursor-col-resize transition-all relative z-20 flex items-center justify-center ${
+            isDraggingSidebar ? "bg-zinc-700" : ""
           }`}
           data-testid="sidebar-resizer"
-        />
+        >
+          <div className="w-0.5 h-6 rounded-full bg-zinc-600 group-hover:bg-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+        </div>
 
         {/* Editor Container */}
         <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden" data-testid="resizable-editor">
@@ -214,14 +217,17 @@ export function ResizableLayout({
         role="separator"
         aria-orientation="horizontal"
         aria-label="Resize bottom panel"
+        title="Drag to resize panel, double-click to reset"
         tabIndex={0}
         onMouseDown={handleBottomMouseDown}
         onDoubleClick={resetBottomHeight}
-        className={`h-1.5 shrink-0 bg-transparent hover:bg-sky-500/50 cursor-row-resize transition-colors relative z-10 ${
-          isDraggingBottom ? "bg-sky-500" : ""
+        className={`group h-1.5 shrink-0 bg-transparent hover:bg-zinc-800/80 cursor-row-resize transition-all relative z-20 flex items-center justify-center ${
+          isDraggingBottom ? "bg-zinc-700" : ""
         }`}
         data-testid="bottom-resizer"
-      />
+      >
+        <div className="h-0.5 w-8 rounded-full bg-zinc-600 group-hover:bg-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+      </div>
 
       {/* Bottom Panel Container */}
       <div
