@@ -72,6 +72,7 @@ function joinStreams(stdoutChunks: Buffer[], stderrChunks: Buffer[]): DemuxedStr
 
 const LANGUAGE_IMAGES: Record<SupportedLanguage, string> = {
   typescript: "node:20-slim",
+  javascript: "node:20-slim",
   python: "python:3.12-slim",
   cpp: "gcc:14",
   java: "eclipse-temurin:21-jdk-alpine",
@@ -88,6 +89,7 @@ const LANGUAGE_COMMANDS: Record<
     "--experimental-default-type=module",
     `/tmp/${entrypoint}`,
   ],
+  javascript: (entrypoint) => ["node", `/tmp/${entrypoint}`],
   python: (entrypoint) => ["python3", `/tmp/${entrypoint}`],
   cpp: () => [
     "sh",
@@ -112,6 +114,7 @@ const LANGUAGE_COMMANDS: Record<
 
 const DEFAULT_ENTRY_POINT: Record<SupportedLanguage, string> = {
   typescript: "index.ts",
+  javascript: "index.js",
   python: "main.py",
   cpp: "main.cpp",
   java: "Main.java",
@@ -275,14 +278,26 @@ export async function executeInSandbox(
     memoryLimitMb: detectMemoryLimit(),
   };
 
-  const entrypoint = task.entrypoint ?? DEFAULT_ENTRY_POINT[task.language];
+  const commandBuilder = LANGUAGE_COMMANDS[task.language];
+  const image = LANGUAGE_IMAGES[task.language];
+
+  if (!commandBuilder || !image) {
+    return {
+      taskId: task.id,
+      status: "failed",
+      stdout: "",
+      stderr: `Unsupported language for batch execution: "${task.language}". Supported languages are: ${Object.keys(LANGUAGE_COMMANDS).join(", ")}. Use the interactive terminal to run this file.`,
+      exitCode: 1,
+      durationMs: 0,
+    };
+  }
+
+  const entrypoint = task.entrypoint ?? DEFAULT_ENTRY_POINT[task.language] ?? "index.js";
 
   const files: readonly ExecutionFile[] = task.files && task.files.length > 0 ? task.files : [{ path: entrypoint, content: task.code ?? "" }];
 
   const archive = await createWorkspaceArchive(files);
-
-  const image = LANGUAGE_IMAGES[task.language];
-  const cmd = LANGUAGE_COMMANDS[task.language](entrypoint);
+  const cmd = commandBuilder(entrypoint);
 
   let container: Dockerode.Container | undefined;
 

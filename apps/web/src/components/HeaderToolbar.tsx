@@ -16,6 +16,7 @@ export interface HeaderToolbarProps {
 
 const LANGUAGE_DOT_COLORS: Record<SupportedLanguage, string> = {
   typescript: "bg-sky-400",
+  javascript: "bg-yellow-400",
   python: "bg-amber-400",
   cpp: "bg-blue-400",
   java: "bg-rose-400",

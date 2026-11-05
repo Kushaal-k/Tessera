@@ -6,6 +6,7 @@ import type { SupportedLanguage } from "@tessera/shared-types";
 
 const LANGUAGE_MAP: Record<SupportedLanguage, string> = {
   typescript: "typescript",
+  javascript: "javascript",
   python: "python",
   cpp: "cpp",
   java: "java",
