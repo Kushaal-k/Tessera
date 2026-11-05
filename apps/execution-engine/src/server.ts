@@ -103,6 +103,9 @@ export function createServer(options: ServerOptions = {}): RunningServer {
             res.end(JSON.stringify({ status: "ok", service: "execution-engine" }));
             return;
         }
+        if (req.url?.startsWith("/terminal/socket.io")) {
+            req.url = req.url.replace(/^\/terminal\/socket\.io/, "/socket.io");
+        }
         if (req.url?.startsWith("/socket.io/")) {
             for (const handler of socketIoRequests) {
                 handler.call(httpServer, req, res);
@@ -117,6 +120,9 @@ export function createServer(options: ServerOptions = {}): RunningServer {
         if (previewProxy.isPreviewRequest(req)) {
             void previewProxy.handleUpgrade(req, socket as net.Socket, head);
             return;
+        }
+        if (req.url?.startsWith("/terminal/socket.io")) {
+            req.url = req.url.replace(/^\/terminal\/socket\.io/, "/socket.io");
         }
         if (req.url?.startsWith("/socket.io/")) {
             for (const handler of socketIoUpgrades) {

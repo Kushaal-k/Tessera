@@ -126,6 +126,7 @@ export function useTerminal({
       TerminalServerToClientEvents,
       TerminalClientToServerEvents
     > = io(`${targetUrl}/terminal`, {
+      path: "/terminal/socket.io",
       transports: ["websocket", "polling"],
       autoConnect: true,
       reconnection: true,
