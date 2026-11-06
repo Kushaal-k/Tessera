@@ -1,0 +1,6 @@
+# Tessera (tesserabuild.tech) robots.txt
+User-agent: *
+Allow: /
+
+# Sitemaps
+Sitemap: https://tesserabuild.tech/sitemap.xml

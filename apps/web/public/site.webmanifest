@@ -1,0 +1,17 @@
+{
+  "name": "Tessera.io — Collaborative Developer Sandbox",
+  "short_name": "Tessera.io",
+  "description": "AI-native collaborative developer sandbox with real-time CRDT synchronization and secure code execution.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090d16",
+  "theme_color": "#090d16",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
