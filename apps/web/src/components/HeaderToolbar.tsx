@@ -58,12 +58,10 @@ export function HeaderToolbar({
               <polyline points="2 12 12 17 22 12" />
             </svg>
           </div>
-          <div className="flex items-baseline gap-1">
-            <span className="text-sm font-medium tracking-tight text-zinc-100">
-              Tessera
-            </span>
+          <h1 className="flex items-baseline gap-1 text-sm font-medium tracking-tight text-zinc-100">
+            <span>Tessera</span>
             <span className="text-xs font-mono text-zinc-500">.io</span>
-          </div>
+          </h1>
         </div>
 
         <span className="hidden md:inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 bg-zinc-900/80 border border-white/[0.08]">

@@ -3,16 +3,131 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Tessera.io — AI-native collaborative developer sandbox with real-time CRDT synchronization and secure code execution." />
+    
+    <!-- Primary SEO Meta Tags -->
+    <title>Tessera — AI-Native Collaborative Developer Sandbox &amp; Code Editor</title>
+    <meta name="title" content="Tessera — AI-Native Collaborative Developer Sandbox &amp; Code Editor" />
+    <meta
+      name="description"
+      content="Tessera (tesserabuild.tech) is an AI-native collaborative developer sandbox with real-time CRDT synchronization, Monaco code editor, interactive Docker terminals, and secure cloud execution."
+    />
+    <meta
+      name="keywords"
+      content="developer sandbox, collaborative code editor, real-time coding, CRDT, web IDE, cloud sandbox, online compiler, live preview, Monaco editor, Docker terminal, Tessera, tesserabuild.tech"
+    />
+    <meta name="author" content="Tessera" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <link rel="canonical" href="https://tesserabuild.tech/" />
+
+    <!-- PWA & Mobile Capabilities -->
     <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#090d16" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Tessera" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <!-- Open Graph / Facebook / LinkedIn -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Tessera" />
+    <meta property="og:url" content="https://tesserabuild.tech/" />
+    <meta property="og:title" content="Tessera — AI-Native Collaborative Developer Sandbox &amp; Code Editor" />
+    <meta
+      property="og:description"
+      content="Collaborate in real-time with zero latency using CRDT sync, multi-file workspaces, interactive Docker terminals, and built-in AI code companion."
+    />
+    <meta property="og:image" content="https://tesserabuild.tech/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Tessera collaborative code sandbox preview" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter Cards -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://tesserabuild.tech/" />
+    <meta name="twitter:title" content="Tessera — AI-Native Collaborative Developer Sandbox &amp; Code Editor" />
+    <meta
+      name="twitter:description"
+      content="Collaborate in real-time with zero latency using CRDT sync, multi-file workspaces, interactive Docker terminals, and built-in AI code companion."
+    />
+    <meta name="twitter:image" content="https://tesserabuild.tech/og-image.png" />
+    <meta name="twitter:image:alt" content="Tessera collaborative code sandbox preview" />
+
+    <!-- Favicons -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>Tessera.io — Collaborative Developer Sandbox</title>
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+
+    <!-- Preconnect & Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+    <!-- Schema.org JSON-LD Structured Data for Google Rich Snippets -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebApplication",
+            "@id": "https://tesserabuild.tech/#webapp",
+            "name": "Tessera",
+            "url": "https://tesserabuild.tech/",
+            "description": "AI-native collaborative developer sandbox with real-time CRDT synchronization, containerized Docker execution, and interactive terminal.",
+            "applicationCategory": "DeveloperApplication",
+            "operatingSystem": "All (Modern Web Browser)",
+            "browserRequirements": "Requires JavaScript. Requires HTML5.",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            },
+            "featureList": [
+              "Real-time CRDT multi-user code synchronization",
+              "Multi-file project tree management with Monaco Editor",
+              "Interactive Docker sandbox terminal with PTY streaming",
+              "Full-stack web preview and live server execution",
+              "Context-aware AI coding companion with intelligent code generation",
+              "Zero-latency multi-participant cursor and awareness tracking"
+            ]
+          },
+          {
+            "@type": "Organization",
+            "@id": "https://tesserabuild.tech/#organization",
+            "name": "Tessera",
+            "url": "https://tesserabuild.tech/",
+            "logo": "https://tesserabuild.tech/favicon.svg"
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- 
+      SEO Pre-render / Initial Shell:
+      Search engine crawlers and non-JS clients read this semantic structure immediately.
+      React replaces root contents on client mount.
+    -->
+    <div id="root">
+      <div style="background:#090d16;color:#e4e4e7;font-family:Inter,-apple-system,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center;">
+        <header>
+          <h1 style="font-size:2rem;font-weight:700;color:#ffffff;margin-bottom:0.75rem;letter-spacing:-0.02em;">
+            Tessera — AI-Native Collaborative Developer Sandbox
+          </h1>
+          <p style="font-size:1.125rem;color:#a1a1aa;max-width:640px;line-height:1.6;margin:0 auto 1.5rem;">
+            Real-time collaborative code editor powered by CRDTs, containerized Docker execution, interactive terminal, and context-aware AI companion.
+          </p>
+        </header>
+        <main>
+          <p style="color:#71717a;font-size:0.875rem;">Loading sandbox workspace...</p>
+        </main>
+        <noscript>
+          <div style="margin-top:1.5rem;padding:1rem;background:#18181b;border:1px solid #27272a;border-radius:0.5rem;max-width:540px;">
+            <p style="color:#f43f5e;font-size:0.875rem;">JavaScript is required to run the interactive code editor and collaborative sandbox.</p>
+          </div>
+        </noscript>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
