@@ -124,17 +124,6 @@ export function HeaderToolbar({
           <Bot className="h-3.5 w-3.5 text-zinc-400" />
           <span className="hidden sm:inline">AI Panel</span>
         </button>
-
-        {/* Connection Status Live Pill */}
-        <div className="flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-zinc-900/80 px-2.5 py-1.5 text-xs text-zinc-300">
-          <span
-            className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : "bg-zinc-600"}`}
-            aria-hidden="true"
-          />
-          <span className="hidden sm:inline text-[11px] font-mono text-zinc-400">
-            {connected ? "Connected" : "Offline"}
-          </span>
-        </div>
       </div>
     </header>
   );
