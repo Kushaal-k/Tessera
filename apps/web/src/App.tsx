@@ -9,9 +9,9 @@ import { setLocalParticipant } from "@tessera/collaboration";
 import type {
   SyncConnectionConfig,
   WorkspaceFile,
-  SupportedLanguage,
 } from "@tessera/shared-types";
 import { useDebouncedValue } from "./hooks/useDebouncedValue.js";
+import { useAwarenessPeers } from "./hooks/useAwarenessPeers.js";
 import { downloadTextFile } from "./utils/downloadUtils.js";
 import { collectDescendantFolderIds } from "./utils/workspaceUtils.js";
 import { getExecutionShortcutText } from "./utils/platformDetection.js";
@@ -35,9 +35,16 @@ import {
   Plus,
 } from "lucide-react";
 
+const isLocalhost =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1");
+
 const SYNC_SERVER_URL =
   import.meta.env.VITE_SYNC_SERVER_URL ??
-  (typeof window !== "undefined" ? window.location.origin : "http://localhost:4000");
+  (typeof window !== "undefined" && !isLocalhost
+    ? window.location.origin
+    : "http://localhost:4000");
 const DEFAULT_ROOM = "default-room";
 
 export function App() {
@@ -66,6 +73,7 @@ export function App() {
   );
 
   const { ydoc, ytext, awareness, connected, socket } = useCollaboration(config);
+  const peers = useAwarenessPeers(awareness);
   const { workspace, tree, files, folders } = useWorkspace(ydoc);
   const {
     activeFileId,
@@ -79,16 +87,6 @@ export function App() {
     removeFilesFromTabs,
   } = useTabManager({ files });
 
-  const [prevActiveFileId, setPrevActiveFileId] = useState(activeFileId);
-  const [languageOverride, setLanguageOverride] = useState<SupportedLanguage | null>(null);
-
-  if (activeFileId !== prevActiveFileId) {
-    setPrevActiveFileId(activeFileId);
-    setLanguageOverride(null);
-  }
-
-  const effectiveLanguage = languageOverride ?? language;
-
   const activeYText = useMemo(() => {
     if (!workspace || !activeFileId) {
       return ytext;
@@ -99,7 +97,7 @@ export function App() {
   const { isRunning, output, handleRunCode } = useCodeExecution({
     socket,
     activeYText,
-    language: effectiveLanguage,
+    language,
     workspace,
     files,
     folders,
@@ -256,8 +254,10 @@ export function App() {
   return (
     <div className="flex h-screen flex-col bg-black text-zinc-100">
       <HeaderToolbar
-        language={effectiveLanguage}
-        onLanguageChange={setLanguageOverride}
+        localParticipant={participant}
+        peers={peers}
+        displayName={displayName}
+        onDisplayNameChange={setDisplayName}
         connected={connected}
         isRunning={isRunning}
         onRunCode={handleRunCodeClick}
@@ -326,44 +326,12 @@ export function App() {
               </div>
             </div>
 
-            {/* Collaborator Profile Card */}
-            <div className="rounded-lg border border-white/[0.08] bg-zinc-900/50 p-2.5">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-medium text-zinc-400">
-                  Collaborator
-                </span>
-                <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                  Live Sync
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ring-1 ring-white/10"
-                  style={{ backgroundColor: participant.cursorColor }}
-                  aria-hidden="true"
-                >
-                  {(displayName.trim() || "A")[0]?.toUpperCase()}
-                </div>
-                <input
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => {
-                    setDisplayName(e.target.value);
-                  }}
-                  maxLength={32}
-                  placeholder="Display name"
-                  aria-label="Your display name"
-                  className="w-full rounded-md border border-white/[0.08] bg-black/60 px-2 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:border-white/[0.2] outline-none transition-colors"
-                />
-              </div>
-            </div>
-
             <EditorSettings
               showMinimap={showMinimap}
               onShowMinimapChange={setShowMinimap}
               fontSize={fontSize}
               onFontSizeChange={setFontSize}
+              defaultExpanded={false}
             />
           </aside>
         }
@@ -383,7 +351,7 @@ export function App() {
                   fileName={activeFileName ?? undefined}
                   ytext={activeYText}
                   awareness={awareness}
-                  language={effectiveLanguage}
+                  language={language}
                   showMinimap={showMinimap}
                   fontSize={fontSize}
                   openFileIds={openFileIds}
@@ -490,7 +458,7 @@ export function App() {
         <AiAssistantPanel
           activeFileName={activeFileName}
           activeCode={activeYText?.toString()}
-          language={effectiveLanguage}
+          language={language}
         />
       </SidePanel>
 

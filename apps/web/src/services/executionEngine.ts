@@ -25,10 +25,17 @@ export async function getPreviewStatus(
 }
 
 export function getExecutionEngineUrl(serverUrl?: string): string {
+  const isLocalhost =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1");
+
   const url =
     serverUrl ??
     (import.meta.env["VITE_EXECUTION_ENGINE_URL"] as string | undefined) ??
-    (typeof window !== "undefined" ? window.location.origin : "http://localhost:4002");
+    (typeof window !== "undefined" && !isLocalhost
+      ? window.location.origin
+      : "http://localhost:4002");
 
   return url.replace(/\/+$/, "");
 }

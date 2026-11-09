@@ -14,7 +14,7 @@ export function EditorSettings({
   onShowMinimapChange,
   fontSize,
   onFontSizeChange,
-  defaultExpanded = true,
+  defaultExpanded = false,
 }: EditorSettingsProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
