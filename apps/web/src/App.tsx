@@ -15,6 +15,7 @@ import { useAwarenessPeers } from "./hooks/useAwarenessPeers.js";
 import { downloadTextFile } from "./utils/downloadUtils.js";
 import { collectDescendantFolderIds } from "./utils/workspaceUtils.js";
 import { getExecutionShortcutText } from "./utils/platformDetection.js";
+import { getSavedDisplayName, saveDisplayName } from "./utils/userProfile.js";
 import { FileTree, type CreatingItemState } from "./components/FileTree.js";
 import { useWorkspace } from "./hooks/useWorkspace.js";
 import { useTabManager } from "./hooks/useTabManager.js";
@@ -48,9 +49,18 @@ const SYNC_SERVER_URL =
 const DEFAULT_ROOM = "default-room";
 
 export function App() {
-  const participant = useMemo(() => createDefaultParticipant(), []);
+  const savedName = useMemo(() => getSavedDisplayName(), []);
+  const participant = useMemo(
+    () => createDefaultParticipant(savedName ? { displayName: savedName } : undefined),
+    [savedName],
+  );
   const [displayName, setDisplayName] = useState(participant.displayName);
   const debouncedName = useDebouncedValue(displayName, 250);
+
+  const handleDisplayNameChange = useCallback((name: string) => {
+    setDisplayName(name);
+    saveDisplayName(name);
+  }, []);
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
   const [showMinimap, setShowMinimap] = useState(true);
   const [fontSize, setFontSize] = useState(14);
@@ -108,10 +118,14 @@ export function App() {
     if (!awareness) {
       return;
     }
+    const effectiveName = debouncedName.trim() || "Anonymous";
     setLocalParticipant(awareness, {
       ...participant,
-      displayName: debouncedName.trim() || "Anonymous",
+      displayName: effectiveName,
     });
+    if (debouncedName.trim()) {
+      saveDisplayName(debouncedName);
+    }
   }, [awareness, participant, debouncedName]);
 
   const handleConfirmCreate = useCallback(
@@ -257,7 +271,7 @@ export function App() {
         localParticipant={participant}
         peers={peers}
         displayName={displayName}
-        onDisplayNameChange={setDisplayName}
+        onDisplayNameChange={handleDisplayNameChange}
         connected={connected}
         isRunning={isRunning}
         onRunCode={handleRunCodeClick}
