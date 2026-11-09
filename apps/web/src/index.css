@@ -99,6 +99,42 @@ button:focus:not(:focus-visible) {
   outline: none;
 }
 
+/* Monaco Collaborative Remote Cursor & Selection Decorations (y-monaco) */
+.yRemoteSelection {
+  background-color: rgba(99, 102, 241, 0.25);
+  border-radius: 1px;
+}
+
+.yRemoteSelectionHead {
+  position: absolute;
+  box-sizing: border-box;
+  height: 100%;
+  border-left: 2px solid #6366f1;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.yRemoteSelectionHead::after {
+  content: " ";
+  position: absolute;
+  top: -16px;
+  left: -2px;
+  padding: 1px 4px;
+  font-size: 10px;
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-weight: 500;
+  line-height: normal;
+  border-radius: 3px 3px 3px 0;
+  background-color: #6366f1;
+  color: #ffffff;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  z-index: 51;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+
 button::-moz-focus-inner {
   border: 0;
 }

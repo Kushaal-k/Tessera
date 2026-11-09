@@ -13,6 +13,19 @@ export default defineConfig({
       "Referrer-Policy": "strict-origin-when-cross-origin",
       "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
     },
+    proxy: {
+      "/socket.io": {
+        target: "http://localhost:4000",
+        ws: true,
+      },
+      "/terminal": {
+        target: "http://localhost:4002",
+        ws: true,
+      },
+      "/preview": {
+        target: "http://localhost:4002",
+      },
+    },
   },
   build: {
     outDir: "dist",

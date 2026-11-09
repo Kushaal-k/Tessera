@@ -6,6 +6,7 @@ import type { editor } from "monaco-editor";
 import type { SupportedLanguage } from "@tessera/shared-types";
 import { registerEditorIntelliSense } from "../intellisense/index.js";
 import { useMonacoModelManager } from "../hooks/useMonacoModelManager.js";
+import { useMonacoDecorations } from "../hooks/useMonacoDecorations.js";
 
 export interface CollaborativeEditorProps {
   readonly fileId?: string;
@@ -41,6 +42,8 @@ export function CollaborativeEditor({
   useEffect(() => {
     onRunCodeRef.current = onRunCode;
   }, [onRunCode]);
+
+  useMonacoDecorations(awareness);
 
   useMonacoModelManager({
     editor: editorState?.editor ?? null,

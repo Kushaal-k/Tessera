@@ -1,10 +1,14 @@
-import type { SupportedLanguage } from "@tessera/shared-types";
+import type { Participant } from "@tessera/shared-types";
+import type { PeerState } from "@tessera/collaboration";
 import { getExecutionShortcutText } from "../utils/platformDetection.js";
 import { Download, Play, Loader2, Bot } from "lucide-react";
+import { CollaboratorAvatarGroup } from "./CollaboratorAvatarGroup.js";
 
 export interface HeaderToolbarProps {
-  readonly language: SupportedLanguage;
-  readonly onLanguageChange: (language: SupportedLanguage) => void;
+  readonly localParticipant: Participant;
+  readonly peers: readonly PeerState[];
+  readonly displayName: string;
+  readonly onDisplayNameChange: (name: string) => void;
   readonly connected: boolean;
   readonly isRunning: boolean;
   readonly onRunCode: () => void;
@@ -14,19 +18,11 @@ export interface HeaderToolbarProps {
   readonly activeFileName: string | null;
 }
 
-const LANGUAGE_DOT_COLORS: Record<SupportedLanguage, string> = {
-  typescript: "bg-sky-400",
-  javascript: "bg-amber-400",
-  python: "bg-emerald-400",
-  cpp: "bg-blue-400",
-  java: "bg-rose-400",
-  rust: "bg-orange-400",
-  go: "bg-cyan-400",
-};
-
 export function HeaderToolbar({
-  language,
-  onLanguageChange,
+  localParticipant,
+  peers,
+  displayName,
+  onDisplayNameChange,
   connected,
   isRunning,
   onRunCode,
@@ -71,31 +67,13 @@ export function HeaderToolbar({
 
       {/* Action Controls */}
       <div className="flex items-center gap-2">
-        {/* Language Selector */}
-        <div className="relative flex items-center">
-          <div className="flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-zinc-900/80 px-2.5 py-1 text-xs text-zinc-300 hover:border-white/[0.16] transition-colors">
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${LANGUAGE_DOT_COLORS[language] ?? "bg-zinc-400"}`}
-              aria-hidden="true"
-            />
-            <select
-              value={language}
-              onChange={(e) => {
-                onLanguageChange(e.target.value as SupportedLanguage);
-              }}
-              aria-label="Language selection"
-              className="bg-transparent text-xs text-zinc-200 outline-none cursor-pointer font-medium pr-1"
-            >
-              <option value="typescript" className="bg-zinc-900 text-zinc-200">TypeScript</option>
-              <option value="javascript" className="bg-zinc-900 text-zinc-200">JavaScript</option>
-              <option value="python" className="bg-zinc-900 text-zinc-200">Python</option>
-              <option value="cpp" className="bg-zinc-900 text-zinc-200">C++</option>
-              <option value="java" className="bg-zinc-900 text-zinc-200">Java</option>
-              <option value="rust" className="bg-zinc-900 text-zinc-200">Rust</option>
-              <option value="go" className="bg-zinc-900 text-zinc-200">Go</option>
-            </select>
-          </div>
-        </div>
+        {/* Collaborators Avatar Group (in place of Language Selector) */}
+        <CollaboratorAvatarGroup
+          localParticipant={localParticipant}
+          peers={peers}
+          displayName={displayName}
+          onDisplayNameChange={onDisplayNameChange}
+        />
 
         {/* Primary Run Code Button */}
         <button
@@ -148,20 +126,14 @@ export function HeaderToolbar({
         </button>
 
         {/* Connection Status Live Pill */}
-        <div
-          className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-mono transition-colors ${
-            connected
-              ? "border-white/[0.08] bg-zinc-900/80 text-zinc-300"
-              : "border-rose-900/50 bg-rose-950/30 text-rose-400"
-          }`}
-          title={connected ? "Connected to real-time CRDT sync server" : "Disconnected from sync server"}
-        >
+        <div className="flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-zinc-900/80 px-2.5 py-1.5 text-xs text-zinc-300">
           <span
-            className={`h-1.5 w-1.5 rounded-full ${
-              connected ? "bg-emerald-400" : "bg-rose-400"
-            }`}
+            className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : "bg-zinc-600"}`}
+            aria-hidden="true"
           />
-          <span className="hidden lg:inline">{connected ? "Connected" : "Offline"}</span>
+          <span className="hidden sm:inline text-[11px] font-mono text-zinc-400">
+            {connected ? "Connected" : "Offline"}
+          </span>
         </div>
       </div>
     </header>
