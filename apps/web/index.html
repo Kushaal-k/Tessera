@@ -5,15 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
     <!-- Primary SEO Meta Tags -->
-    <title>Tessera — AI-Native Collaborative Developer Sandbox &amp; Code Editor</title>
-    <meta name="title" content="Tessera — AI-Native Collaborative Developer Sandbox &amp; Code Editor" />
+    <title>Tessera — Collaborative cloud code editor</title>
     <meta
       name="description"
-      content="Tessera (tesserabuild.tech) is an AI-native collaborative developer sandbox with real-time CRDT synchronization, Monaco code editor, interactive Docker terminals, and secure cloud execution."
-    />
-    <meta
-      name="keywords"
-      content="developer sandbox, collaborative code editor, real-time coding, CRDT, web IDE, cloud sandbox, online compiler, live preview, Monaco editor, Docker terminal, Tessera, tesserabuild.tech"
+      content="Collaborative cloud IDE with a shared Monaco editor, live terminal, and web preview. Write and run code together in the browser."
     />
     <meta name="author" content="Tessera" />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
@@ -31,10 +26,10 @@
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Tessera" />
     <meta property="og:url" content="https://tesserabuild.tech/" />
-    <meta property="og:title" content="Tessera — AI-Native Collaborative Developer Sandbox &amp; Code Editor" />
+    <meta property="og:title" content="Tessera — Collaborative cloud code editor" />
     <meta
       property="og:description"
-      content="Collaborate in real-time with zero latency using CRDT sync, multi-file workspaces, interactive Docker terminals, and built-in AI code companion."
+      content="Collaborative cloud IDE with a shared Monaco editor, live terminal, and web preview. Write and run code together in the browser."
     />
     <meta property="og:image" content="https://tesserabuild.tech/og-image.png" />
     <meta property="og:image:type" content="image/png" />
@@ -46,22 +41,19 @@
     <!-- Twitter Cards -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://tesserabuild.tech/" />
-    <meta name="twitter:title" content="Tessera — AI-Native Collaborative Developer Sandbox &amp; Code Editor" />
+    <meta name="twitter:title" content="Tessera — Collaborative cloud code editor" />
     <meta
       name="twitter:description"
-      content="Collaborate in real-time with zero latency using CRDT sync, multi-file workspaces, interactive Docker terminals, and built-in AI code companion."
+      content="Collaborative cloud IDE with a shared Monaco editor, live terminal, and web preview. Write and run code together in the browser."
     />
     <meta name="twitter:image" content="https://tesserabuild.tech/og-image.png" />
     <meta name="twitter:image:alt" content="Tessera collaborative code sandbox preview" />
 
     <!-- Favicons -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/favicon.svg" />
-
-    <!-- Preconnect & Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
     <!-- Schema.org JSON-LD Structured Data for Google Rich Snippets -->
     <script type="application/ld+json">
@@ -76,14 +68,19 @@
             "sameAs": [
               "https://github.com/Kushaal-k/Tessera"
             ],
-            "description": "AI-native collaborative developer sandbox with real-time CRDT synchronization, containerized Docker execution, and interactive terminal.",
+            "description": "Collaborative cloud IDE with a shared Monaco editor, live terminal, and web preview. Write and run code together in the browser.",
             "applicationCategory": "DeveloperApplication",
             "operatingSystem": "All (Modern Web Browser)",
             "browserRequirements": "Requires JavaScript. Requires HTML5.",
+            "publisher": {
+              "@id": "https://tesserabuild.tech/#organization"
+            },
+            "screenshot": "https://tesserabuild.tech/og-image.png",
             "offers": {
               "@type": "Offer",
               "price": "0",
-              "priceCurrency": "USD"
+              "priceCurrency": "USD",
+              "availability": "https://schema.org/InStock"
             },
             "featureList": [
               "Real-time CRDT multi-user code synchronization",
@@ -99,7 +96,12 @@
             "@id": "https://tesserabuild.tech/#organization",
             "name": "Tessera",
             "url": "https://tesserabuild.tech/",
-            "logo": "https://tesserabuild.tech/favicon.svg",
+            "logo": {
+              "@type": "ImageObject",
+              "url": "https://tesserabuild.tech/tessera-logo-112.png",
+              "width": 112,
+              "height": 112
+            },
             "sameAs": [
               "https://github.com/Kushaal-k/Tessera"
             ]
@@ -118,10 +120,10 @@
       <div style="background:#090d16;color:#e4e4e7;font-family:Inter,-apple-system,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center;">
         <header>
           <h1 style="font-size:2rem;font-weight:700;color:#ffffff;margin-bottom:0.75rem;letter-spacing:-0.02em;">
-            Tessera — AI-Native Collaborative Developer Sandbox
+            Tessera — Collaborative cloud code editor
           </h1>
           <p style="font-size:1.125rem;color:#a1a1aa;max-width:640px;line-height:1.6;margin:0 auto 1.5rem;">
-            Real-time collaborative code editor powered by CRDTs, containerized Docker execution, interactive terminal, and context-aware AI companion.
+            Collaborative cloud IDE with a shared Monaco editor, live terminal, and web preview. Write and run code together in the browser.
           </p>
         </header>
         <main>

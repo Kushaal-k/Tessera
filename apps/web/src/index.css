@@ -1,3 +1,11 @@
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/600.css";
+
 @import "tailwindcss";
 @source "../../../packages/ui-components/src";
 
@@ -137,4 +145,55 @@ button:focus:not(:focus-visible) {
 
 button::-moz-focus-inner {
   border: 0;
+}
+
+@keyframes tessera-wash {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(32px, 20px, 0);
+  }
+}
+
+@keyframes tessera-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes tessera-live {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.marketing-wash {
+  animation: tessera-wash 18s ease-in-out infinite;
+}
+
+.marketing-rise {
+  animation: tessera-rise 700ms ease-out both;
+}
+
+.marketing-live {
+  animation: tessera-live 2.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marketing-wash,
+  .marketing-rise,
+  .marketing-live {
+    animation: none;
+  }
 }

@@ -1,6 +1,7 @@
 # Tessera (tesserabuild.tech) robots.txt
 User-agent: *
 Allow: /
+Disallow: /sandbox
 
 # Sitemaps
 Sitemap: https://tesserabuild.tech/sitemap.xml
