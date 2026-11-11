@@ -57,14 +57,28 @@ export function AuthCallbackPage() {
           body: JSON.stringify({ code }),
         });
 
+        if (!res.ok) {
+          const contentType = res.headers.get("content-type") ?? "";
+          if (contentType.includes("application/json")) {
+            const errData = (await res.json()) as { error?: string };
+            throw new Error(errData.error || `Authentication failed with status ${res.status}`);
+          }
+          if (res.status === 405) {
+            throw new Error(
+              "Nginx returned 405 Not Allowed. The /api/ route needs to be proxied to the sync-server (port 4000) on your server.",
+            );
+          }
+          throw new Error(`Authentication service returned HTTP status ${res.status}`);
+        }
+
         const data = (await res.json()) as {
           user?: AuthUser;
           accessToken?: string;
           error?: string;
         };
 
-        if (!res.ok || !data.user) {
-          throw new Error(data.error || `Authentication request failed with status ${res.status}`);
+        if (!data.user) {
+          throw new Error(data.error || "Authentication completed but no user profile was returned");
         }
 
         // Commit active session to React state and persistent storage
