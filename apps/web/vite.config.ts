@@ -14,6 +14,9 @@ export default defineConfig({
       "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
     },
     proxy: {
+      "/api": {
+        target: "http://localhost:4000",
+      },
       "/socket.io": {
         target: "http://localhost:4000",
         ws: true,

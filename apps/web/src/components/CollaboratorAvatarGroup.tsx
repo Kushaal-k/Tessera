@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { Participant } from "@tessera/shared-types";
 import type { PeerState } from "@tessera/collaboration";
-import { Users, Check, X } from "lucide-react";
+import type { AuthUser } from "../auth/types.js";
+import { Users, Check, X, LogOut } from "lucide-react";
 
 export interface CollaboratorAvatarGroupProps {
   readonly localParticipant: Participant;
@@ -9,6 +10,8 @@ export interface CollaboratorAvatarGroupProps {
   readonly displayName: string;
   readonly onDisplayNameChange: (name: string) => void;
   readonly maxVisible?: number;
+  readonly authUser?: AuthUser | null;
+  readonly onLogout?: () => void;
 }
 
 function getInitials(name?: string | null): string {
@@ -29,6 +32,8 @@ export function CollaboratorAvatarGroup({
   displayName,
   onDisplayNameChange,
   maxVisible = 3,
+  authUser,
+  onLogout,
 }: CollaboratorAvatarGroupProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [editingName, setEditingName] = useState(displayName);
@@ -171,46 +176,61 @@ export function CollaboratorAvatarGroup({
           {/* Unified Collaborators List */}
           <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">
             {/* Local Participant (You) */}
-            <div className="flex items-center gap-2 rounded-md p-1.5 hover:bg-zinc-900/40 transition-colors">
-              <div
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ring-1 ring-white/10"
-                style={{ backgroundColor: localParticipant.cursorColor }}
-                aria-hidden="true"
-              >
-                {getInitials(displayName)}
-              </div>
-              <form
-                onSubmit={handleNameSubmit}
-                className="flex flex-1 items-center gap-1 min-w-0"
-              >
-                <input
-                  type="text"
-                  value={editingName}
-                  onChange={(e) => {
-                    setEditingName(e.target.value);
-                  }}
-                  onBlur={() => {
-                    handleNameSubmit();
-                  }}
-                  maxLength={32}
-                  placeholder="Your name"
-                  aria-label="Your display name"
-                  className="w-full min-w-0 rounded border border-white/[0.08] bg-black/50 px-2 py-0.5 text-xs text-zinc-200 placeholder-zinc-500 focus:border-white/20 outline-none transition-colors"
-                />
-                {editingName.trim() !== displayName.trim() && (
-                  <button
-                    type="submit"
-                    title="Save name"
-                    aria-label="Save name"
-                    className="rounded p-1 text-emerald-400 hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
+            <div className="flex flex-col gap-1 rounded-md p-1.5 hover:bg-zinc-900/40 transition-colors">
+              <div className="flex items-center gap-2">
+                {authUser?.picture ? (
+                  <img
+                    src={authUser.picture}
+                    alt={displayName}
+                    className="h-6 w-6 shrink-0 rounded-full object-cover ring-1 ring-white/10"
+                  />
+                ) : (
+                  <div
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ring-1 ring-white/10"
+                    style={{ backgroundColor: localParticipant.cursorColor }}
+                    aria-hidden="true"
                   >
-                    <Check className="h-3 w-3" />
-                  </button>
+                    {getInitials(displayName)}
+                  </div>
                 )}
-              </form>
-              <span className="text-[10px] text-zinc-500 font-mono shrink-0 px-1.5 py-0.5 rounded bg-zinc-800/80 border border-white/5">
-                You
-              </span>
+                <form
+                  onSubmit={handleNameSubmit}
+                  className="flex flex-1 items-center gap-1 min-w-0"
+                >
+                  <input
+                    type="text"
+                    value={editingName}
+                    onChange={(e) => {
+                      setEditingName(e.target.value);
+                    }}
+                    onBlur={() => {
+                      handleNameSubmit();
+                    }}
+                    maxLength={32}
+                    placeholder="Your name"
+                    aria-label="Your display name"
+                    className="w-full min-w-0 rounded border border-white/[0.08] bg-black/50 px-2 py-0.5 text-xs text-zinc-200 placeholder-zinc-500 focus:border-white/20 outline-none transition-colors"
+                  />
+                  {editingName.trim() !== displayName.trim() && (
+                    <button
+                      type="submit"
+                      title="Save name"
+                      aria-label="Save name"
+                      className="rounded p-1 text-emerald-400 hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
+                    >
+                      <Check className="h-3 w-3" />
+                    </button>
+                  )}
+                </form>
+                <span className="text-[10px] text-zinc-500 font-mono shrink-0 px-1.5 py-0.5 rounded bg-zinc-800/80 border border-white/5">
+                  You
+                </span>
+              </div>
+              {authUser?.email && (
+                <span className="text-[10px] text-zinc-500 truncate pl-8">
+                  {authUser.email}
+                </span>
+              )}
             </div>
 
             {/* Remote Peers */}
@@ -234,6 +254,23 @@ export function CollaboratorAvatarGroup({
               </div>
             ))}
           </div>
+
+          {/* Popover Footer with Logout */}
+          {onLogout && (
+            <div className="mt-2 pt-2 border-t border-white/[0.08]">
+              <button
+                type="button"
+                onClick={() => {
+                  handleClose();
+                  onLogout();
+                }}
+                className="w-full flex items-center justify-center gap-1.5 rounded-md border border-white/[0.08] bg-zinc-900/60 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors cursor-pointer"
+              >
+                <LogOut className="h-3 w-3" />
+                <span>Sign out</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
