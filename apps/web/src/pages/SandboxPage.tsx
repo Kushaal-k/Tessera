@@ -54,7 +54,11 @@ export function SandboxPage() {
                 className="w-full inline-flex h-10 items-center justify-center gap-2 rounded-md bg-zinc-100 px-4 text-xs font-medium text-zinc-950 transition-colors hover:bg-white cursor-pointer"
               >
                 <GitHubIcon className="h-4 w-4 text-zinc-950" />
-                <span>{isConfigured ? "Sign in with GitHub" : "Continue with GitHub (dev mode)"}</span>
+                <span>
+                  {isConfigured || !import.meta.env.DEV
+                    ? "Sign in with GitHub"
+                    : "Continue with GitHub (dev mode)"}
+                </span>
               </button>
 
               <Link
@@ -66,7 +70,7 @@ export function SandboxPage() {
               </Link>
             </div>
 
-            {!isConfigured && (
+            {import.meta.env.DEV && !isConfigured && (
               <p className="text-[11px] text-zinc-500 border-t border-white/[0.06] pt-4 leading-relaxed">
                 GitHub OAuth client ID is not configured in <code className="font-mono text-zinc-400">.env</code>; continuing activates local developer authentication.
               </p>
