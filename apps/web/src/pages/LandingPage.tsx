@@ -128,27 +128,37 @@ export function LandingPage() {
               <div>
                 <p className="text-zinc-600">{"// Shared workspace"}</p>
                 <p>
-                  <span className="text-zinc-500">import</span> express{" "}
-                  <span className="text-zinc-500">from</span>{" "}
-                  <span className="text-zinc-200">&quot;express&quot;</span>;
+                  <span className="text-indigo-300">import</span>
+                  <span className="text-zinc-300"> express </span>
+                  <span className="text-indigo-300">from</span>{" "}
+                  <span className="text-emerald-300">&quot;express&quot;</span>
+                  <span className="text-zinc-500">;</span>
                 </p>
                 <p>
-                  <span className="text-zinc-500">const</span> app ={" "}
-                  <span className="text-zinc-100">express</span>();
+                  <span className="text-indigo-300">const</span>
+                  <span className="text-zinc-300"> app = </span>
+                  <span className="text-zinc-200">express</span>
+                  <span className="text-zinc-500">();</span>
                 </p>
                 <p className="pt-3">
-                  app.<span className="text-zinc-100">get</span>(
-                  <span className="text-zinc-200">&quot;/api/session&quot;</span>, () =&gt; &#123;
+                  <span className="text-zinc-200">app</span>
+                  <span className="text-zinc-500">.</span>
+                  <span className="text-indigo-300">get</span>
+                  <span className="text-zinc-500">(</span>
+                  <span className="text-emerald-300">&quot;/api/session&quot;</span>
+                  <span className="text-zinc-500">, () =&gt; &#123;</span>
                 </p>
                 <p className="pl-4">
-                  <span className="border-l-2 border-indigo-400 pl-2 text-zinc-100">
-                    status: &quot;live&quot;
+                  <span className="border-l-2 border-indigo-400 pl-2">
+                    <span className="text-indigo-300">status</span>
+                    <span className="text-zinc-500">: </span>
+                    <span className="text-emerald-300">&quot;live&quot;</span>
                   </span>
                   <span className="ml-2 rounded bg-indigo-500/15 px-1.5 py-0.5 text-[10px] text-indigo-300">
                     Jordan
                   </span>
                 </p>
-                <p>&#125;);</p>
+                <p className="text-zinc-500">&#125;);</p>
               </div>
               <div className="mt-6 flex items-center justify-between border-t border-white/[0.06] pt-3 text-[11px] text-zinc-500">
                 <span>TypeScript</span>
@@ -168,7 +178,11 @@ export function LandingPage() {
                   </span>
                   <span>node:20-slim</span>
                 </div>
-                <p className="text-zinc-500">$ node --watch server.ts</p>
+                <p>
+                  <span className="text-zinc-500">$ </span>
+                  <span className="text-indigo-300">node</span>
+                  <span className="text-zinc-300"> --watch server.ts</span>
+                </p>
                 <p className="text-zinc-200">[server] listening on port 5173</p>
                 <p className="text-emerald-400/90">[preview] /preview/default-room/</p>
               </div>
