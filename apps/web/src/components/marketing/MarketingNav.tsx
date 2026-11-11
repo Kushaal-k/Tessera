@@ -6,6 +6,17 @@ import { GitHubIcon } from "./GitHubIcon.js";
 import { primaryButtonClass } from "./marketingClasses.js";
 import { useAuth } from "../../auth/index.js";
 
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
+function headerVeil(feather: number, solid: number): number {
+  if (solid >= 0.995) {
+    return 1;
+  }
+  return Math.max(feather, solid);
+}
+
 function linkClass(isActive: boolean): string {
   const base =
     "rounded-md px-2 py-1 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400";
@@ -17,14 +28,19 @@ function linkClass(isActive: boolean): string {
 
 export function MarketingNav() {
   const { isAuthenticated, user, login, logout, isLoading } = useAuth();
-  const [cover, setCover] = useState(0);
+  const [chrome, setChrome] = useState({ feather: 0, solid: 0 });
 
   useEffect(() => {
     const onScroll = () => {
-      const start = 96;
-      const end = 240;
-      const next = Math.min(1, Math.max(0, (window.scrollY - start) / (end - start)));
-      setCover(next);
+      const y = window.scrollY;
+      const feather = Math.round(clamp01((y - 40) / (120 - 40)) * 100) / 100;
+      const solid = Math.round(clamp01((y - 520) / (700 - 520)) * 100) / 100;
+      setChrome((current) => {
+        if (current.feather === feather && current.solid === solid) {
+          return current;
+        }
+        return { feather, solid };
+      });
     };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -33,13 +49,14 @@ export function MarketingNav() {
     };
   }, []);
 
+  const veil = headerVeil(chrome.feather, chrome.solid);
+
   return (
-    <header
-      className="sticky top-0 z-50 w-full"
-      style={{
-        background: `linear-gradient(to bottom, rgba(0, 0, 0, ${0.82 * cover}) 0%, rgba(0, 0, 0, ${0.4 * cover}) 58%, rgba(0, 0, 0, 0) 100%)`,
-      }}
-    >
+    <header className="sticky top-0 z-50 w-full">
+      <div
+        className="relative"
+        style={{ background: `rgba(0, 0, 0, ${veil})` }}
+      >
       <div className="relative mx-auto flex h-14 max-w-5xl items-center justify-between gap-4 px-4 sm:px-6">
         <NavLink to="/" className="flex min-w-0 items-center gap-2.5 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400" end>
           <BrandMark className="h-5 w-5 shrink-0" />
@@ -112,6 +129,14 @@ export function MarketingNav() {
             <ArrowRight className="hidden h-3.5 w-3.5 text-zinc-700 sm:block" />
           </NavLink>
         </nav>
+      </div>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-full h-8"
+          style={{
+            background: `linear-gradient(to bottom, rgba(0, 0, 0, ${veil}), rgba(0, 0, 0, 0))`,
+          }}
+        />
       </div>
     </header>
   );
