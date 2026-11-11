@@ -1,5 +1,6 @@
 import type { Participant } from "@tessera/shared-types";
 import type { PeerState } from "@tessera/collaboration";
+import type { AuthUser } from "../auth/types.js";
 import { getExecutionShortcutText } from "../utils/platformDetection.js";
 import { Download, Play, Loader2, Bot } from "lucide-react";
 import { CollaboratorAvatarGroup } from "./CollaboratorAvatarGroup.js";
@@ -16,6 +17,8 @@ export interface HeaderToolbarProps {
   readonly canDownload: boolean;
   readonly onOpenAiPanel: () => void;
   readonly activeFileName: string | null;
+  readonly authUser?: AuthUser | null;
+  readonly onLogout?: () => void;
 }
 
 export function HeaderToolbar({
@@ -30,6 +33,8 @@ export function HeaderToolbar({
   canDownload,
   onOpenAiPanel,
   activeFileName,
+  authUser,
+  onLogout,
 }: HeaderToolbarProps) {
   const shortcutText = getExecutionShortcutText();
 
@@ -73,6 +78,8 @@ export function HeaderToolbar({
           peers={peers}
           displayName={displayName}
           onDisplayNameChange={onDisplayNameChange}
+          authUser={authUser}
+          onLogout={onLogout}
         />
 
         {/* Primary Run Code Button */}

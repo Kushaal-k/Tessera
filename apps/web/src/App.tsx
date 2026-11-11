@@ -26,6 +26,7 @@ import { ResizableLayout } from "./components/ResizableLayout.js";
 import { EditorSettings } from "./components/EditorSettings.js";
 import { TabBar } from "./components/TabBar.js";
 import { AiAssistantPanel } from "./components/AiAssistantPanel.js";
+import { useAuth } from "./auth/index.js";
 import {
   FilePlus,
   FolderPlus,
@@ -49,13 +50,23 @@ const SYNC_SERVER_URL =
 const DEFAULT_ROOM = "default-room";
 
 export function App() {
+  const { user, logout } = useAuth();
   const savedName = useMemo(() => getSavedDisplayName(), []);
+  const authName = user?.name?.trim() || user?.nickname?.trim();
+  const effectiveInitialName = authName || savedName || "Anonymous";
+
   const participant = useMemo(
-    () => createDefaultParticipant(savedName ? { displayName: savedName } : undefined),
-    [savedName],
+    () => createDefaultParticipant({ displayName: effectiveInitialName }),
+    [effectiveInitialName],
   );
-  const [displayName, setDisplayName] = useState(participant.displayName);
+  const [displayName, setDisplayName] = useState(effectiveInitialName);
   const debouncedName = useDebouncedValue(displayName, 250);
+
+  useEffect(() => {
+    if (!savedName && authName) {
+      saveDisplayName(authName);
+    }
+  }, [authName, savedName]);
 
   const handleDisplayNameChange = useCallback((name: string) => {
     setDisplayName(name);
@@ -279,6 +290,8 @@ export function App() {
         canDownload={activeYText !== null}
         onOpenAiPanel={() => setIsAiPanelOpen(true)}
         activeFileName={activeFileName}
+        authUser={user}
+        onLogout={logout}
       />
 
       <ResizableLayout

@@ -13,6 +13,8 @@
     "lint": "eslint src/"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
     "@monaco-editor/react": "^4.7.0",
     "@tessera/collaboration": "*",
     "@tessera/shared-types": "*",
@@ -24,6 +26,7 @@
     "monaco-editor": "^0.55.1",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "react-router-dom": "^7.18.5",
     "socket.io-client": "^4.8.3",
     "y-monaco": "^0.1.6",
     "y-protocols": "^1.0.7",
