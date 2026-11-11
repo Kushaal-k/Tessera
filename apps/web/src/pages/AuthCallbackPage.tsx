@@ -61,14 +61,9 @@ export function AuthCallbackPage() {
           const contentType = res.headers.get("content-type") ?? "";
           if (contentType.includes("application/json")) {
             const errData = (await res.json()) as { error?: string };
-            throw new Error(errData.error || `Authentication failed with status ${res.status}`);
+            throw new Error(errData.error || "Authentication failed. Please try again.");
           }
-          if (res.status === 405) {
-            throw new Error(
-              "Nginx returned 405 Not Allowed. The /api/ route needs to be proxied to the sync-server (port 4000) on your server.",
-            );
-          }
-          throw new Error(`Authentication service returned HTTP status ${res.status}`);
+          throw new Error("Unable to connect to the authentication service. Please try again in a moment.");
         }
 
         const data = (await res.json()) as {
