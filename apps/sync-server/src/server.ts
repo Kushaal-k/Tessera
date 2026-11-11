@@ -1,6 +1,19 @@
 import http from "node:http";
 import crypto from "node:crypto";
 import express from "express";
+
+if (typeof process.loadEnvFile === "function") {
+  try {
+    process.loadEnvFile(".env");
+  } catch {
+    // Optional local .env
+  }
+  try {
+    process.loadEnvFile("../../.env");
+  } catch {
+    // Optional monorepo root .env
+  }
+}
 import { Server as SocketIOServer } from "socket.io";
 import * as Y from "yjs";
 import { Awareness, applyAwarenessUpdate, removeAwarenessStates } from "y-protocols/awareness";
@@ -17,6 +30,7 @@ import type {
 
 import { createWorkspace } from "@tessera/collaboration";
 import { registerDocumentSyncHandlers, extractBinaryPayload } from "./documentSync.js";
+import { createAuthRouter } from "./auth.js";
 
 interface RoomState {
   readonly doc: Y.Doc;
@@ -86,9 +100,22 @@ function getOrCreateRoom(roomId: string): RoomState {
 const app = express();
 app.use(express.json());
 
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", CORS_ORIGIN === "*" ? "*" : CORS_ORIGIN);
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") {
+    res.sendStatus(204);
+    return;
+  }
+  next();
+});
+
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
+
+app.use("/api/auth", createAuthRouter());
 
 const server = http.createServer(app);
 
