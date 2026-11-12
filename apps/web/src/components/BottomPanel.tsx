@@ -66,32 +66,33 @@ export function BottomPanel({
   return (
     <div className="flex flex-col h-full w-full overflow-hidden bg-[#09090b] border-t border-white/[0.08]">
       {/* Dock Tabs Header */}
-      <div className="flex h-9 items-center justify-between px-3 bg-[#09090b] border-b border-white/[0.08] select-none">
-        <div className="flex items-center gap-1">
+      <div className="flex h-9 min-w-0 items-center justify-between gap-2 px-2 bg-[#09090b] border-b border-white/[0.08] select-none sm:px-3">
+        <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
           <button
             type="button"
             onClick={() => handleSelectTab("terminal")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors duration-150 ${
+            className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors duration-150 ${
               activeTab === "terminal"
                 ? "bg-zinc-900 text-zinc-100 border border-white/[0.08]"
                 : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40"
             }`}
           >
-            <TerminalIcon className="h-3.5 w-3.5 text-zinc-400" />
+            <TerminalIcon className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
             <span>Terminal</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleSelectTab("output")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors duration-150 ${
+            className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors duration-150 ${
               activeTab === "output"
                 ? "bg-zinc-900 text-zinc-100 border border-white/[0.08]"
                 : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40"
             }`}
           >
-            <Play className="h-3.5 w-3.5 text-zinc-400" />
-            <span>Execution output</span>
+            <Play className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+            <span className="sm:hidden">Output</span>
+            <span className="hidden sm:inline">Execution output</span>
             {isRunning && (
               <span className="flex h-1.5 w-1.5 rounded-full bg-amber-400 ml-0.5" />
             )}
@@ -100,14 +101,15 @@ export function BottomPanel({
           <button
             type="button"
             onClick={() => handleSelectTab("preview")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors duration-150 ${
+            className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors duration-150 ${
               activeTab === "preview"
                 ? "bg-zinc-900 text-zinc-100 border border-white/[0.08]"
                 : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40"
             }`}
           >
-            <Globe className="h-3.5 w-3.5 text-zinc-400" />
-            <span>Web preview</span>
+            <Globe className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+            <span className="sm:hidden">Preview</span>
+            <span className="hidden sm:inline">Web preview</span>
           </button>
         </div>
 

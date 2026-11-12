@@ -124,7 +124,7 @@ export function LandingPage() {
               </ul>
             </aside>
 
-            <div className="flex flex-col justify-between border-b border-white/[0.08] p-5 font-mono text-[13px] leading-6 text-zinc-300 md:border-b-0 md:border-r">
+            <div className="flex flex-col justify-between overflow-x-auto border-b border-white/[0.08] p-5 font-mono text-[13px] leading-6 text-zinc-300 md:border-b-0 md:border-r">
               <div>
                 <p className="text-zinc-600">{"// Shared workspace"}</p>
                 <p>
@@ -169,7 +169,7 @@ export function LandingPage() {
               </div>
             </div>
 
-            <div className="flex flex-col justify-between bg-[#070709] p-5 font-mono text-[13px] leading-6 text-zinc-400">
+            <div className="flex flex-col justify-between overflow-x-auto bg-[#070709] p-5 font-mono text-[13px] leading-6 text-zinc-400">
               <div>
                 <div className="mb-3 flex items-center justify-between border-b border-white/[0.06] pb-2 text-[11px] text-zinc-500">
                   <span className="inline-flex items-center gap-1.5">

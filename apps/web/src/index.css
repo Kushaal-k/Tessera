@@ -97,10 +97,13 @@ body {
 /* Hide scrollbar utility for tab bars while maintaining scrollability */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
+  width: 0;
+  height: 0;
 }
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+  scrollbar-color: transparent transparent;
 }
 
 button:focus:not(:focus-visible) {
@@ -147,16 +150,6 @@ button::-moz-focus-inner {
   border: 0;
 }
 
-@keyframes tessera-wash {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-  50% {
-    transform: translate3d(32px, 20px, 0);
-  }
-}
-
 @keyframes tessera-rise {
   from {
     opacity: 0;
@@ -178,10 +171,6 @@ button::-moz-focus-inner {
   }
 }
 
-.marketing-wash {
-  animation: tessera-wash 18s ease-in-out infinite;
-}
-
 .marketing-rise {
   animation: tessera-rise 700ms ease-out both;
 }
@@ -191,7 +180,6 @@ button::-moz-focus-inner {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .marketing-wash,
   .marketing-rise,
   .marketing-live {
     animation: none;

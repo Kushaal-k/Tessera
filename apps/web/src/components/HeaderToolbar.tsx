@@ -2,7 +2,7 @@ import type { Participant } from "@tessera/shared-types";
 import type { PeerState } from "@tessera/collaboration";
 import type { AuthUser } from "../auth/types.js";
 import { getExecutionShortcutText } from "../utils/platformDetection.js";
-import { Download, Play, Loader2, Bot } from "lucide-react";
+import { Download, Play, Loader2, Bot, PanelLeft } from "lucide-react";
 import { CollaboratorAvatarGroup } from "./CollaboratorAvatarGroup.js";
 
 export interface HeaderToolbarProps {
@@ -19,6 +19,8 @@ export interface HeaderToolbarProps {
   readonly activeFileName: string | null;
   readonly authUser?: AuthUser | null;
   readonly onLogout?: () => void;
+  readonly explorerOpen?: boolean;
+  readonly onToggleExplorer?: () => void;
 }
 
 export function HeaderToolbar({
@@ -35,14 +37,27 @@ export function HeaderToolbar({
   activeFileName,
   authUser,
   onLogout,
+  explorerOpen = false,
+  onToggleExplorer,
 }: HeaderToolbarProps) {
   const shortcutText = getExecutionShortcutText();
 
   return (
-    <header className="flex h-12 items-center justify-between border-b border-white/[0.08] px-4 bg-[#09090b] select-none z-20">
-      {/* Brand Lockup */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2">
+    <header className="flex h-12 min-w-0 items-center justify-between gap-2 border-b border-white/[0.08] px-2 bg-[#09090b] select-none z-20 sm:px-4">
+      <div className="flex min-w-0 items-center gap-2">
+        {onToggleExplorer ? (
+          <button
+            type="button"
+            onClick={onToggleExplorer}
+            aria-label={explorerOpen ? "Close explorer" : "Open explorer"}
+            aria-expanded={explorerOpen}
+            title="Explorer"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-white/[0.08] bg-zinc-900/80 text-zinc-300 md:hidden"
+          >
+            <PanelLeft className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
+        <div className="flex min-w-0 items-center gap-2">
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-zinc-900 border border-white/[0.08] text-white">
             <svg
               className="h-3.5 w-3.5 text-zinc-100"
@@ -59,7 +74,7 @@ export function HeaderToolbar({
               <polyline points="2 12 12 17 22 12" />
             </svg>
           </div>
-          <h1 className="flex items-baseline gap-1 text-sm font-medium tracking-tight text-zinc-100">
+          <h1 className="hidden min-w-0 items-baseline gap-1 text-sm font-medium tracking-tight text-zinc-100 sm:flex">
             <span>Tessera</span>
             <span className="text-xs font-mono text-zinc-500">.io</span>
           </h1>
@@ -71,7 +86,7 @@ export function HeaderToolbar({
       </div>
 
       {/* Action Controls */}
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
         {/* Collaborators Avatar Group (in place of Language Selector) */}
         <CollaboratorAvatarGroup
           localParticipant={localParticipant}
