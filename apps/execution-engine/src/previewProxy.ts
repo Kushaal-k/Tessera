@@ -199,8 +199,25 @@ export class PreviewProxy {
     }
 
     private requestProtocol(req: http.IncomingMessage): "http" | "https" {
-        return req.headers["x-forwarded-proto"] === "https" ||
-            (req.socket as net.Socket & { encrypted?: boolean })?.encrypted ? "https" : "http";
+        const header = req.headers["x-forwarded-proto"];
+        const forwarded = (Array.isArray(header) ? header.join(",") : header)
+            ?.split(",")[0]
+            ?.trim()
+            .toLowerCase();
+        if (forwarded === "https" || forwarded === "http") {
+            return forwarded;
+        }
+        if ((req.socket as net.Socket & { encrypted?: boolean })?.encrypted) {
+            return "https";
+        }
+        // TLS ends at nginx, so this process often sees a plain HTTP socket.
+        // A public host must not be downgraded to http, or the browser stays
+        // on that URL after refresh.
+        const host = this.hostname(req);
+        if (host === "localhost" || host.endsWith(".localhost") || net.isIP(host)) {
+            return "http";
+        }
+        return "https";
     }
 
     private redirectToPreview(req: http.IncomingMessage, res: http.ServerResponse, route: PreviewRouteParams): void {
