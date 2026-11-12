@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests src/",
     "clean": "rm -rf dist",
-    "lint": "echo 'lint not configured yet'"
+    "lint": "eslint src --ext .ts"
   },
   "dependencies": {
     "@tessera/shared-types": "*",
