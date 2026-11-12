@@ -11,7 +11,6 @@ import {
   Clock,
 } from "lucide-react";
 import type { ExecutionResult } from "@tessera/shared-types";
-import { formatDurationMs } from "../utils/formatDuration.js";
 import { getExecutionShortcutText } from "../utils/platformDetection.js";
 import { Terminal } from "./Terminal.js";
 import { LivePreview } from "./LivePreview.js";
@@ -116,10 +115,10 @@ export function BottomPanel({
 
         {/* Output tab header metadata and quick actions */}
         {activeTab === "output" && output && (
-          <div className="flex shrink-0 items-center gap-2 text-xs font-mono">
-            <div className="flex items-center gap-1 whitespace-nowrap text-zinc-400 text-[11px] tabular-nums">
+          <div className="flex items-center gap-2.5 text-xs font-mono">
+            <div className="flex items-center gap-1 text-zinc-400 text-[11px] tabular-nums">
               <Clock className="h-3 w-3 text-zinc-500" />
-              <span>{formatDurationMs(output.durationMs)}</span>
+              <span>{output.durationMs}ms</span>
             </div>
             {output.exitCode !== null && (
               <span
