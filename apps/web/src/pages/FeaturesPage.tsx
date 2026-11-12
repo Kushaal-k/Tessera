@@ -168,7 +168,7 @@ export function FeaturesPage() {
         <p className="mt-5 max-w-2xl text-base leading-relaxed text-zinc-400 sm:text-lg">
           The collaborative cloud IDE is one workspace: shared editing, a container terminal, a live preview, and an assistant that sees the file you are in.
         </p>
-        <nav aria-label="Feature sections" className="mt-8 flex gap-2 overflow-x-auto pb-1">
+        <nav aria-label="Feature sections" className="no-scrollbar mt-8 flex gap-2 overflow-x-auto pb-1">
           {sections.map((section) => (
             <a
               key={section.id}
@@ -220,7 +220,7 @@ export function FeaturesPage() {
                   <span>{section.panelTitle}</span>
                   <span className="text-emerald-400/90">{section.panelStatus}</span>
                 </div>
-                <pre className="overflow-x-auto p-4 font-mono text-[13px] leading-6">
+                <pre className="no-scrollbar overflow-x-auto p-4 font-mono text-[13px] leading-6">
                   {section.panelLines.map((line, index) => (
                     <div key={`${section.id}-${index}`}>{line}</div>
                   ))}

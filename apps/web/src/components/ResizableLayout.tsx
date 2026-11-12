@@ -11,11 +11,33 @@ export const MAX_BOTTOM_HEIGHT_PERCENT = 0.7;
 export const SIDEBAR_WIDTH_STORAGE_KEY = "tessera:sidebar-width";
 export const BOTTOM_HEIGHT_STORAGE_KEY = "tessera:bottom-panel-height";
 
+const COMPACT_LAYOUT_QUERY = "(max-width: 767px)";
+
+function useCompactLayout(): boolean {
+  const [compact, setCompact] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia(COMPACT_LAYOUT_QUERY);
+    const apply = () => {
+      setCompact(media.matches);
+    };
+    apply();
+    media.addEventListener("change", apply);
+    return () => {
+      media.removeEventListener("change", apply);
+    };
+  }, []);
+
+  return compact;
+}
+
 export interface ResizableLayoutProps {
   readonly sidebar: ReactNode;
   readonly editor: ReactNode;
   readonly bottomPanel: ReactNode;
   readonly className?: string;
+  readonly sidebarOpen?: boolean;
+  readonly onSidebarOpenChange?: (open: boolean) => void;
 }
 
 export function ResizableLayout({
@@ -23,7 +45,10 @@ export function ResizableLayout({
   editor,
   bottomPanel,
   className,
+  sidebarOpen = false,
+  onSidebarOpenChange,
 }: ResizableLayoutProps) {
+  const compact = useCompactLayout();
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
     try {
       const saved = localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
@@ -143,7 +168,8 @@ export function ResizableLayout({
       }
       const containerRect = container.getBoundingClientRect();
       const rawHeight = containerRect.bottom - e.clientY;
-      const maxHeight = containerRect.height * MAX_BOTTOM_HEIGHT_PERCENT;
+      const maxPercent = compact ? 0.45 : MAX_BOTTOM_HEIGHT_PERCENT;
+      const maxHeight = containerRect.height * maxPercent;
       const clampedHeight = Math.min(
         Math.max(rawHeight, MIN_BOTTOM_HEIGHT),
         maxHeight
@@ -170,7 +196,7 @@ export function ResizableLayout({
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
     };
-  }, [isDraggingBottom, bottomHeight]);
+  }, [isDraggingBottom, bottomHeight, compact]);
 
   return (
     <div
@@ -180,16 +206,32 @@ export function ResizableLayout({
       } ${className ?? ""}`}
     >
       <div className="flex flex-1 overflow-hidden relative">
-        {/* Sidebar Container */}
+        {compact && sidebarOpen ? (
+          <button
+            type="button"
+            aria-label="Close explorer"
+            className="absolute inset-0 z-20 bg-black/60"
+            onClick={() => {
+              onSidebarOpenChange?.(false);
+            }}
+          />
+        ) : null}
+
         <div
-          style={{ width: `${sidebarWidth}px` }}
-          className="shrink-0 flex flex-col h-full overflow-hidden"
+          style={compact ? undefined : { width: `${sidebarWidth}px` }}
+          className={
+            compact
+              ? `absolute inset-y-0 left-0 z-30 w-[min(16rem,85vw)] flex-col overflow-hidden bg-[#09090b] shadow-2xl ${
+                  sidebarOpen ? "flex" : "hidden"
+                }`
+              : "shrink-0 flex flex-col h-full overflow-hidden"
+          }
           data-testid="resizable-sidebar"
         >
           {sidebar}
         </div>
 
-        {/* Vertical Resizer Handle */}
+        {compact ? null : (
         <div
           role="separator"
           aria-orientation="vertical"
@@ -205,6 +247,7 @@ export function ResizableLayout({
         >
           <div className="w-0.5 h-6 rounded-full bg-zinc-700 group-hover:bg-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
         </div>
+        )}
 
         {/* Editor Container */}
         <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden" data-testid="resizable-editor">
@@ -231,7 +274,10 @@ export function ResizableLayout({
 
       {/* Bottom Panel Container */}
       <div
-        style={{ height: `${bottomHeight}px` }}
+        style={{
+          height: `${bottomHeight}px`,
+          maxHeight: compact ? "42vh" : undefined,
+        }}
         className="shrink-0 flex flex-col overflow-hidden"
         data-testid="resizable-bottom"
       >

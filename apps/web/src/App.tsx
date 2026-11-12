@@ -31,6 +31,7 @@ import {
   FilePlus,
   FolderPlus,
   Loader2,
+  X,
   Code2,
   Bot,
   Keyboard,
@@ -73,6 +74,7 @@ export function App() {
     saveDisplayName(name);
   }, []);
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
+  const [explorerOpen, setExplorerOpen] = useState(false);
   const [showMinimap, setShowMinimap] = useState(true);
   const [fontSize, setFontSize] = useState(14);
   const [bottomPanelTab, setBottomPanelTab] = useState<BottomPanelTab>("terminal");
@@ -102,7 +104,7 @@ export function App() {
     openFiles,
     language,
     setActiveFileId,
-    handleSelectFile,
+    handleSelectFile: openFileFromTree,
     handleCloseTab,
     openFile,
     removeFilesFromTabs,
@@ -257,6 +259,14 @@ export function App() {
     return activeFile?.name ?? null;
   }, [files, activeFileId]);
 
+  const handleSelectFile = useCallback(
+    (file: Parameters<typeof openFileFromTree>[0]) => {
+      openFileFromTree(file);
+      setExplorerOpen(false);
+    },
+    [openFileFromTree],
+  );
+
   const handleRunCodeClick = useCallback(() => {
     setBottomPanelTab("output");
     handleRunCode();
@@ -289,12 +299,18 @@ export function App() {
         onDownload={handleDownload}
         canDownload={activeYText !== null}
         onOpenAiPanel={() => setIsAiPanelOpen(true)}
+        explorerOpen={explorerOpen}
+        onToggleExplorer={() => {
+          setExplorerOpen((open) => !open);
+        }}
         activeFileName={activeFileName}
         authUser={user}
         onLogout={logout}
       />
 
       <ResizableLayout
+        sidebarOpen={explorerOpen}
+        onSidebarOpenChange={setExplorerOpen}
         sidebar={
           <aside className="w-full h-full border-r border-white/[0.08] bg-[#09090b] p-3 flex flex-col gap-3 select-none">
             {/* Explorer Section */}
@@ -330,6 +346,17 @@ export function App() {
                     className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
                   >
                     <FolderPlus className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Close explorer"
+                    aria-label="Close explorer"
+                    onClick={() => {
+                      setExplorerOpen(false);
+                    }}
+                    className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors md:hidden"
+                  >
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
