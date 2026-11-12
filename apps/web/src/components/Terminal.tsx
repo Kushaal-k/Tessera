@@ -60,22 +60,14 @@ export function Terminal({ roomId, className, serverUrl }: TerminalProps) {
         <div className="flex items-center gap-2">
           <TerminalIcon className="h-3.5 w-3.5 text-zinc-400" />
           <span className="text-[11px] font-mono text-zinc-400 font-medium">bash (pty)</span>
-          <span
-            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium font-mono ${
-              status === "connected"
-                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                : status === "connecting"
-                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-            }`}
-          >
+          <span className="inline-flex items-center gap-1.5 font-mono text-[10px] text-zinc-500">
             <span
               className={`h-1.5 w-1.5 rounded-full ${
                 status === "connected"
                   ? "bg-emerald-400"
                   : status === "connecting"
-                  ? "bg-amber-400 animate-ping"
-                  : "bg-rose-400"
+                    ? "bg-zinc-500"
+                    : "bg-rose-400"
               }`}
             />
             {status}
