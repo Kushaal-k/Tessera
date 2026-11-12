@@ -120,6 +120,28 @@ describe("preview URL parsing", () => {
 });
 
 describe("preview HTTP routing", () => {
+    it("keeps a public preview on https when the engine itself is reached over http", async () => {
+        const { base } = await engine();
+        const response = await request(base, "tesserabuild.tech", "/preview/ws-a/5173/");
+        expect(response.status).toBe(307);
+        expect(response.headers.get("location")).toMatch(
+            /^https:\/\/p5173-[a-f0-9]{32}\.preview\.tesserabuild\.tech\/$/,
+        );
+        await response.text();
+    });
+
+    it("does not upgrade localhost or an explicit http forwarding header", async () => {
+        const { base } = await engine();
+        const local = await previewHost(base, "ws-a", 5173);
+        expect(local.includes(".preview.localhost")).toBe(true);
+        const explicit = await request(base, "tesserabuild.tech", "/preview/ws-a/5173/", {
+            "x-forwarded-proto": "http",
+        });
+        expect(explicit.status).toBe(307);
+        expect(explicit.headers.get("location")?.startsWith("http://")).toBe(true);
+        await explicit.text();
+    });
+
     it("redirects to a stable workspace-and-port origin on the configured preview domain", async () => {
         const { base } = await engine(mockRunner(), "https://engine.example.com");
         const a = await previewHost(base, "ws-a", 5173, "/api/health?x=1");
